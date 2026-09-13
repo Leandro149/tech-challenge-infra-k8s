@@ -123,7 +123,7 @@ Exemplo de operador adicional:
 ["arn:aws:iam::213284176265:role/SuaRoleDeOperacao"]
 ```
 
-Nenhum `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` ou `AWS_SESSION_TOKEN` precisa ser cadastrado nos secrets dessas workflows. A action usa OIDC com `id-token: write`, role por Environment e account ID autorizado.
+Para a configuração acadêmica, também é possível cadastrar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e, quando a credencial for temporária, `AWS_SESSION_TOKEN` como **Secrets** do Environment. Quando esses secrets existem, a action usa essas credenciais diretamente. Se eles não existirem, a action usa OIDC com `id-token: write`, role por Environment e account ID autorizado.
 
 Restrinja as branches de deploy: `homologacao` somente `develop`, `producao` somente `main`. Os Environments `*-plan` precisam aceitar `refs/pull/*/merge` para PRs e a branch correspondente para planos manuais. Proteja `develop` e `main` exigindo PR e os checks de CI antes do merge. As workflows não adicionam uma aprovação manual ao apply após merge.
 
