@@ -1,6 +1,6 @@
 # TC3-06 — Terraform do Kubernetes / EKS
 
-Repositório de infraestrutura do Tech Challenge. Provisiona uma VPC, Amazon EKS com Managed Node Groups e IAM; configura namespaces, Load Balancer Controller, Metrics Server e HPA com Terraform.
+Repositório de infraestrutura do Tech Challenge. Provisiona uma VPC, Amazon EKS com Managed Node Groups e IAM; configura namespaces, Load Balancer Controller, Metrics Server e HPA com Terraform. Inclui CI/CD do **TC3-09**, com homologação e produção separadas.
 
 ## Atendimento aos requisitos
 
@@ -22,7 +22,10 @@ infra/                   # Recursos AWS e outputs para a plataforma
 platform/                # Recursos Kubernetes e charts Helm
   tests/                 # Planos simulados, sem acessar um cluster
   terraform.tfvars.example
-docs/                    # Exemplo opcional de backend S3
+bootstrap/               # Buckets de state e roles OIDC das pipelines
+environments/            # Configuração versionada de homologação/produção
+tests/ci/                # Testes offline da lógica de CI/CD
+docs/                    # Acesso AWS, CI/CD e exemplo de backend S3
 scripts/                 # Configuração local de acesso AWS por perfil
 .github/workflows/       # Validação automática de Terraform
 .specs/                  # Requisitos e decisões da entrega
@@ -177,6 +180,14 @@ O Deployment `api` precisa existir para o HPA operar. O repositório da aplicaç
 
 O namespace `observability` fica disponível para ferramentas futuras; Metrics Server atende o HPA, mas não substitui uma plataforma de monitoramento.
 
+## CI/CD — TC3-09
+
+As workflows em `.github/workflows/` executam `fmt`, `validate` e testes em bootstrap/infra/platform. PRs internas para `develop` fazem `plan` de homologação; PRs para `main` fazem `plan` de produção. Quando a PR é mesclada, a pipeline cria um novo plano no commit de merge e executa `apply` de infra, seguido de plan/apply de platform. Pushes diretos não fazem apply.
+
+Os ambientes usam configurações em `environments/`, VPCs/clusters/buckets próprios e roles OIDC distintas de plan/apply. O plano da plataforma no primeiro provisionamento é adiado até existir cluster/state/RBAC; o primeiro merge provisiona as duas etapas.
+
+Para ativar, aplicar `bootstrap/`, registrar runners Linux com IP de saída fixo e configurar as Variables dos GitHub Environments. O procedimento completo está em [CI/CD da infraestrutura](docs/ci-cd.md). Não é preciso adicionar chaves AWS permanentes aos secrets da pipeline.
+
 ## State remoto opcional com S3
 
 Para trabalho em equipe, use um bucket S3 existente com versionamento, criptografia e acesso restrito. Cada etapa precisa de uma key diferente.
@@ -218,17 +229,21 @@ Sem credenciais AWS e sem cluster:
 
 ```powershell
 terraform fmt -check -recursive
+terraform -chdir=bootstrap init -backend=false -input=false
+terraform -chdir=bootstrap validate
+terraform -chdir=bootstrap test
 terraform -chdir=infra init -backend=false -input=false
 terraform -chdir=infra validate
 terraform -chdir=infra test
 terraform -chdir=platform init -backend=false -input=false
 terraform -chdir=platform validate
 terraform -chdir=platform test
+node --test tests/ci/terraform-config.test.mjs
 ```
 
 Os testes usam providers simulados e executam apenas planos. Verificam rede privada, acesso administrativo, restrições de CIDR, IRSA, HPA e desativação do exemplo. Não comprovam permissões, quotas ou funcionamento na AWS; essa etapa é verificada pelos comandos acima após o apply.
 
-O GitHub Actions executa formatação, init, validate e os testes a cada push/PR. Não executa apply nem precisa de secrets AWS. Ao habilitar backend S3 localmente, mantenha a configuração do backend fora dos testes e informe `-backend=false` na CI.
+Os checks de CI executam sem credenciais AWS. Os jobs de plan/apply usam OIDC e state S3 conforme a configuração do ambiente. Ao habilitar backend S3 localmente, utilize `-backend=false` na inicialização dos checks offline. Node 22 ou superior é necessário para os testes de CI/CD.
 
 ## Remover os recursos
 

@@ -71,4 +71,4 @@ Depois de revisar o plano, seguir as etapas de apply e verificação no README. 
 
 ## GitHub Actions
 
-A workflow atual executa validação e testes simulados, sem acesso AWS. Para provisionar pelo GitHub, é necessário configurar OIDC, role de execução restrita ao repositório, state S3 e acesso de rede do runner ao EKS. Essas configurações ainda não foram criadas na conta AWS. Chaves locais não são automaticamente utilizadas pelo GitHub Actions.
+As workflows do TC3-09 executam validação offline, plan em PRs internas e apply após merge, com homologação e produção separadas. Para ativar os jobs AWS, aplicar o Terraform de bootstrap e configurar os Environments/runners conforme [CI/CD](ci-cd.md). Esses recursos ainda não foram criados na conta AWS. Chaves locais não são utilizadas pelo GitHub Actions; os jobs AWS autenticam por OIDC.

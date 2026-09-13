@@ -6,7 +6,7 @@ Atualizado em 2026-09-13.
 
 - R01–R05 implementados em infra/ e platform/.
 - Formatação e validação Terraform aprovadas nas duas etapas.
-- Nove testes com providers simulados aprovados: cinco AWS e quatro Kubernetes/Helm; somente plans.
+- Quinze testes com providers simulados aprovados: sete infra, seis platform e dois bootstrap; somente plans. Treze testes Node de CI/CD aprovados.
 - Charts AWS Load Balancer Controller 3.5.0 e Metrics Server 3.14.0 passaram em helm lint e helm template com Kubernetes 1.35.
 - Providers fixados em lockfiles; checksums de Windows/Linux amd64.
 - README em português, exemplos tfvars, backend S3 opcional e CI de validação.
@@ -28,7 +28,7 @@ Atualizado em 2026-09-13.
 - Executar scripts/Configure-AwsEnvironment.ps1 para validar identidade e gerar ARN IAM/CIDRs em arquivos access.auto.tfvars locais, ignorados pelo Git. O arquivo local infra/access.auto.tfvars já contém conta/região, sem administrador/CIDR até a autenticação.
 - Ajustar capacidade, tags e opções de state para a conta.
 - Executar plan/apply com credenciais próprias e verificar a entrega na AWS conforme README.
-- Publicar os commits locais no remoto quando desejar.
+- Publicar os commits locais no remoto quando desejar; aplicar bootstrap e configurar os quatro GitHub Environments e runners Linux de IP fixo conforme docs/ci-cd.md.
 
 ## Limitações da validação
 
@@ -41,4 +41,16 @@ Nenhum recurso AWS foi criado. Testes simulados e validação sintática não co
 - Sessões STS resolvidas para role IAM via GetRole para preservar paths; o script também aceita ARN IAM explícito.
 - Arquivos terraform.tfvars existentes preservados; conta, região, AZs, administrador e CIDRs gerados em access.auto.tfvars com precedência documentada.
 - docs/aws-access.md descreve configuração do perfil fora do repositório e renovação das credenciais temporárias.
-- Deploy pelo GitHub Actions ainda depende de configurar OIDC, role de execução, S3 e acesso de rede do runner; a workflow atual continua sendo de validação.
+- Workflows TC3-09 implementadas; execução AWS depende de aplicar bootstrap OIDC/S3 e configurar Environments/runners. Nenhuma workflow AWS foi executada nesta validação local.
+
+## TC3-09 — CI/CD
+
+- develop -> homologacao/hml; main -> producao/prod. Buckets, VPCs, clusters, roles e configurações diferentes.
+- Push executa somente CI. PR interna executa plan; closed/merged executa novo plan/apply no commit de merge. Forks sem plan AWS antes do merge; manual somente plan.
+- Reusable workflow com preflight, OIDC plan/apply, diretórios temporários sem tfvars locais, locking S3 e grupos de concorrência por ambiente/operação.
+- Bootstrap com provider GitHub OIDC reutilizável, buckets privados/versionados/SSE-S3/TLS e roles específicas. Policies de EC2/EKS da role apply são amplas nesses serviços da conta; separação lógica não equivale a contas AWS separadas.
+- EKS Access Entry readonly e RBAC get/list/watch para plan; inclui secrets para leitura de releases Helm. Admin de apply e operadores opcionais configurados pela pipeline.
+- Primeiro plan de plataforma em PR adiado se states infra/platform não existirem; merge cria AWS antes do plano/apply Kubernetes. Falha S3 de acesso não é tratada como state inexistente.
+- Output environment e postcondition da leitura do state evitam cruzar ambientes. Produção sem aplicação demonstrativa não exige CIDR de ALB.
+- actionlint local aprovou as duas workflows; testes Node verificaram roteamento/merge/fork, roles/buckets, IP e isolamento de parâmetros, códigos do plan e state inicial.
+- Check de commit atual da branch antes do apply impede que jobs antigos na fila apliquem código anterior a um merge mais recente.
