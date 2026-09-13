@@ -5,6 +5,8 @@
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+!environments/**/infra.tfvars.json
+!environments/**/platform.tfvars.json
 crash.log
 crash.*.log
 override.tf
