@@ -23,6 +23,8 @@ jobs:
       AWS_REGION: us-east-1
       AWS_ACCOUNT_ID: "213284176265"
       BOOTSTRAP_BUCKET: tech-challenge-tfstate-213284176265-bootstrap
+      HML_STATE_BUCKET: tech-challenge-tfstate-213284176265-hml
+      PROD_STATE_BUCKET: tech-challenge-tfstate-213284176265-prod
       STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACESS_KEY_ID || secrets.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEYID }}
       STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_KEY_ID || secrets.AWS_SECRET_ACCESS_KEY_ID || secrets.AWS_SECRETKEY_ID }}
       STATIC_AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN || secrets.AWS_TOKEN || secrets.AWS_SESSION }}
@@ -75,6 +77,26 @@ jobs:
             --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
           jq -n --arg bucket "$BOOTSTRAP_BUCKET" '{Version:"2012-10-17",Statement:[{Sid:"RequireTLS",Effect:"Deny",Principal:"*",Action:"s3:*",Resource:[("arn:aws:s3:::"+$bucket),("arn:aws:s3:::"+$bucket+"/*")],Condition:{Bool:{"aws:SecureTransport":"false"}}}]}' > "$RUNNER_TEMP/bootstrap-bucket-policy.json"
           aws s3api put-bucket-policy --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" --policy "file://$RUNNER_TEMP/bootstrap-bucket-policy.json"
+      - name: Prepare private environment state storage
+        run: |
+          for bucket in "$HML_STATE_BUCKET" "$PROD_STATE_BUCKET"; do
+            if ! aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$AWS_ACCOUNT_ID" 2> "$RUNNER_TEMP/$bucket-error"; then
+              if ! grep -Eq '\(404\)|NoSuchBucket|Not Found' "$RUNNER_TEMP/$bucket-error"; then
+                cat "$RUNNER_TEMP/$bucket-error" >&2
+                echo "::error::Não foi possível verificar o bucket $bucket. Confira permissões S3; acesso negado não significa bucket inexistente."
+                exit 1
+              fi
+              aws s3api create-bucket --bucket "$bucket" --region "$AWS_REGION" --object-ownership BucketOwnerEnforced
+              aws s3api wait bucket-exists --bucket "$bucket" --expected-bucket-owner "$AWS_ACCOUNT_ID"
+            fi
+            aws s3api put-public-access-block --bucket "$bucket" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+              --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+            aws s3api put-bucket-versioning --bucket "$bucket" --expected-bucket-owner "$AWS_ACCOUNT_ID" --versioning-configuration Status=Enabled
+            aws s3api put-bucket-encryption --bucket "$bucket" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+              --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+            jq -n --arg bucket "$bucket" '{Version:"2012-10-17",Statement:[{Sid:"RequireTLS",Effect:"Deny",Principal:"*",Action:"s3:*",Resource:[("arn:aws:s3:::"+$bucket),("arn:aws:s3:::"+$bucket+"/*")],Condition:{Bool:{"aws:SecureTransport":"false"}}}]}' > "$RUNNER_TEMP/$bucket-policy.json"
+            aws s3api put-bucket-policy --bucket "$bucket" --expected-bucket-owner "$AWS_ACCOUNT_ID" --policy "file://$RUNNER_TEMP/$bucket-policy.json"
+          done
       - name: Initialize persistent bootstrap state
         run: |
           bootstrap_dir="$RUNNER_TEMP/terraform-bootstrap"
@@ -115,7 +137,7 @@ jobs:
             echo "::error::O plano do bootstrap contém remoções. Revise o state e a configuração antes de aplicar."
             exit 1
           fi
-      - name: Apply S3 buckets and Terraform IAM roles
+      - name: Apply Terraform IAM roles
         run: terraform -chdir="$BOOTSTRAP_DIR" apply -input=false -no-color -lock-timeout=10m bootstrap.tfplan
       - name: Report environment variables and Kubernetes operator
         run: |

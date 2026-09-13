@@ -1,8 +1,5 @@
 mock_provider "aws" {
   override_during = plan
-  mock_resource "aws_s3_bucket" {
-    defaults = { arn = "arn:aws:s3:::test-state" }
-  }
   mock_resource "aws_iam_openid_connect_provider" {
     defaults = { arn = "arn:aws:iam::213284176265:oidc-provider/token.actions.githubusercontent.com" }
   }
@@ -12,13 +9,13 @@ run "separate_environments_and_roles" {
   command = plan
 
   assert {
-    condition     = aws_s3_bucket.state["homologacao"].bucket != aws_s3_bucket.state["producao"].bucket && length(aws_iam_role.terraform) == 4
+    condition     = local.state_bucket_names["homologacao"] != local.state_bucket_names["producao"] && length(aws_iam_role.terraform) == 4
     error_message = "Os ambientes devem ter buckets separados e roles distintas de plan/apply."
   }
 
   assert {
-    condition     = aws_s3_bucket_versioning.state["producao"].versioning_configuration[0].status == "Enabled" && aws_s3_bucket_public_access_block.state["producao"].block_public_policy
-    error_message = "O state deve ser privado e versionado."
+    condition     = local.state_bucket_names["producao"] == "tech-challenge-tfstate-213284176265-prod"
+    error_message = "O nome do bucket de produção deve continuar estável."
   }
 
   assert {

@@ -7,7 +7,9 @@ provider "aws" {
 }
 
 locals {
-  environments = { homologacao = "hml", producao = "prod" }
+  environments       = { homologacao = "hml", producao = "prod" }
+  state_bucket_names = { for name, suffix in local.environments : name => "${var.project_name}-tfstate-${var.aws_account_id}-${suffix}" }
+  state_bucket_arns  = { for name, bucket in local.state_bucket_names : name => "arn:aws:s3:::${bucket}" }
   roles = merge(
     { for name, suffix in local.environments : "${name}-plan" => { environment = name, suffix = suffix, mode = "plan", github_environment = "${name}-plan" } },
     { for name, suffix in local.environments : "${name}-apply" => { environment = name, suffix = suffix, mode = "apply", github_environment = name } },
@@ -19,55 +21,6 @@ resource "aws_iam_openid_connect_provider" "github" {
   count          = var.existing_github_oidc_provider_arn == null ? 1 : 0
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
-}
-
-resource "aws_s3_bucket" "state" {
-  for_each = local.environments
-  bucket   = "${var.project_name}-tfstate-${var.aws_account_id}-${each.value}"
-  tags     = { Environment = each.value }
-}
-
-resource "aws_s3_bucket_versioning" "state" {
-  for_each = aws_s3_bucket.state
-  bucket   = each.value.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
-  for_each = aws_s3_bucket.state
-  bucket   = each.value.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "state" {
-  for_each                = aws_s3_bucket.state
-  bucket                  = each.value.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_policy" "state" {
-  for_each = aws_s3_bucket.state
-  bucket   = each.value.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid       = "RequireTLS"
-      Effect    = "Deny"
-      Principal = "*"
-      Action    = "s3:*"
-      Resource  = [each.value.arn, "${each.value.arn}/*"]
-      Condition = { Bool = { "aws:SecureTransport" = "false" } }
-    }]
-  })
 }
 
 resource "aws_iam_role" "terraform" {
@@ -100,17 +53,17 @@ resource "aws_iam_role_policy" "state" {
       {
         Effect   = "Allow"
         Action   = ["s3:ListBucket"]
-        Resource = aws_s3_bucket.state[each.value.environment].arn
+        Resource = local.state_bucket_arns[each.value.environment]
       },
       {
         Effect   = "Allow"
         Action   = each.value.mode == "apply" ? ["s3:GetObject", "s3:PutObject"] : ["s3:GetObject"]
-        Resource = [for root in ["infra", "platform"] : "${aws_s3_bucket.state[each.value.environment].arn}/${root}/terraform.tfstate"]
+        Resource = [for root in ["infra", "platform"] : "${local.state_bucket_arns[each.value.environment]}/${root}/terraform.tfstate"]
       },
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-        Resource = [for root in ["infra", "platform"] : "${aws_s3_bucket.state[each.value.environment].arn}/${root}/terraform.tfstate.tflock"]
+        Resource = [for root in ["infra", "platform"] : "${local.state_bucket_arns[each.value.environment]}/${root}/terraform.tfstate.tflock"]
       },
     ]
   })
