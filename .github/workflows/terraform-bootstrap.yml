@@ -87,7 +87,16 @@ jobs:
             -backend-config="region=$AWS_REGION" -backend-config=encrypt=true -backend-config=use_lockfile=true
       - name: Reuse an existing GitHub OIDC provider
         run: |
-          terraform -chdir="$BOOTSTRAP_DIR" state list > "$RUNNER_TEMP/bootstrap-resources"
+          if ! terraform -chdir="$BOOTSTRAP_DIR" state list > "$RUNNER_TEMP/bootstrap-resources" 2> "$RUNNER_TEMP/bootstrap-state-error"; then
+            if grep -Fq 'No state file was found!' "$RUNNER_TEMP/bootstrap-state-error"; then
+              # Primeiro bootstrap: o backend foi inicializado, mas ainda não há state.
+              : > "$RUNNER_TEMP/bootstrap-resources"
+            else
+              cat "$RUNNER_TEMP/bootstrap-state-error" >&2
+              echo "::error::Não foi possível ler o state do bootstrap. Confira acesso S3 e integridade do state."
+              exit 1
+            fi
+          fi
           # Preserva o provider gerenciado por este state nas próximas execuções.
           if ! grep -Fq 'aws_iam_openid_connect_provider.github[0]' "$RUNNER_TEMP/bootstrap-resources"; then
             provider_arn="arn:aws:iam::$AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"

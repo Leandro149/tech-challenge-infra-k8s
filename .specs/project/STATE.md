@@ -47,6 +47,8 @@ Nenhum recurso AWS foi criado. Testes simulados e validação sintática não co
 
 ### Bootstrap manual pelo GitHub (2026-09-13)
 
+- Correção do primeiro bootstrap: state list pode retornar "No state file was found!" antes do primeiro apply. Esse caso segue com lista vazia; falhas de acesso ou state inválido continuam interrompendo o job. Teste executa a etapa Bash com cinco cenários simulados, sem chamadas AWS.
+
 - Run de PR 34788543879 autenticou com secrets, mas falhou no init por NoSuchBucket no bucket de produção.
 - Workflow Terraform bootstrap adicionada: execução manual em main com Environment producao, armazenamento remoto separado e persistente, reutilização de provider OIDC e plan/apply de S3/IAM antes do deploy.
 - Operador deve executar bootstrap com credenciais S3/IAM autorizadas, configurar Variables do resumo e reexecutar o run de merge. Nenhum bucket foi criado nesta sessão local.
