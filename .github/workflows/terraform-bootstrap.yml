@@ -1,0 +1,135 @@
+name: Terraform bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-bootstrap-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Prepare S3 and IAM for Terraform
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: producao
+    timeout-minutes: 30
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      AWS_REGION: us-east-1
+      AWS_ACCOUNT_ID: "213284176265"
+      BOOTSTRAP_BUCKET: tech-challenge-tfstate-213284176265-bootstrap
+      STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACESS_KEY_ID || secrets.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEYID }}
+      STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_KEY_ID || secrets.AWS_SECRET_ACCESS_KEY_ID || secrets.AWS_SECRETKEY_ID }}
+      STATIC_AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN || secrets.AWS_TOKEN || secrets.AWS_SESSION }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+          terraform_wrapper: false
+      - name: Check bootstrap credentials
+        run: |
+          if [[ -z "$STATIC_AWS_ACCESS_KEY_ID" || -z "$STATIC_AWS_SECRET_ACCESS_KEY" ]]; then
+            echo "::error::Configure AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY no Environment producao, com permissões para S3 e IAM."
+            exit 1
+          fi
+          if [[ "$STATIC_AWS_ACCESS_KEY_ID" == ASIA* && -z "$STATIC_AWS_SESSION_TOKEN" ]]; then
+            echo "::error::Credenciais temporárias exigem AWS_SESSION_TOKEN no Environment producao."
+            exit 1
+          fi
+      - name: Authenticate bootstrap operator
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          aws-access-key-id: ${{ env.STATIC_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.STATIC_AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.STATIC_AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+          allowed-account-ids: "213284176265"
+          unset-current-credentials: true
+      # Este bucket guarda somente o state do bootstrap e é preparado antes do init.
+      - name: Prepare private bootstrap state storage
+        run: |
+          if ! aws s3api head-bucket --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" 2> "$RUNNER_TEMP/bootstrap-bucket-error"; then
+            if ! grep -Eq '\(404\)|NoSuchBucket|Not Found' "$RUNNER_TEMP/bootstrap-bucket-error"; then
+              cat "$RUNNER_TEMP/bootstrap-bucket-error" >&2
+              echo "::error::Não foi possível verificar o bucket do bootstrap. Confira permissões S3; acesso negado não significa bucket inexistente."
+              exit 1
+            fi
+            aws s3api create-bucket --bucket "$BOOTSTRAP_BUCKET" --region "$AWS_REGION" --object-ownership BucketOwnerEnforced
+            aws s3api wait bucket-exists --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID"
+          fi
+          aws s3api put-public-access-block --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+            --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          aws s3api put-bucket-versioning --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" --versioning-configuration Status=Enabled
+          aws s3api put-bucket-encryption --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+            --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          jq -n --arg bucket "$BOOTSTRAP_BUCKET" '{Version:"2012-10-17",Statement:[{Sid:"RequireTLS",Effect:"Deny",Principal:"*",Action:"s3:*",Resource:[("arn:aws:s3:::"+$bucket),("arn:aws:s3:::"+$bucket+"/*")],Condition:{Bool:{"aws:SecureTransport":"false"}}}]}' > "$RUNNER_TEMP/bootstrap-bucket-policy.json"
+          aws s3api put-bucket-policy --bucket "$BOOTSTRAP_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" --policy "file://$RUNNER_TEMP/bootstrap-bucket-policy.json"
+      - name: Initialize persistent bootstrap state
+        run: |
+          bootstrap_dir="$RUNNER_TEMP/terraform-bootstrap"
+          mkdir -p "$bootstrap_dir"
+          cp bootstrap/*.tf bootstrap/.terraform.lock.hcl "$bootstrap_dir/"
+          printf 'terraform {\n  backend "s3" {}\n}\n' > "$bootstrap_dir/backend.tf"
+          echo "BOOTSTRAP_DIR=$bootstrap_dir" >> "$GITHUB_ENV"
+          terraform -chdir="$bootstrap_dir" init -input=false -lockfile=readonly \
+            -backend-config="bucket=$BOOTSTRAP_BUCKET" -backend-config=key=bootstrap/terraform.tfstate \
+            -backend-config="region=$AWS_REGION" -backend-config=encrypt=true -backend-config=use_lockfile=true
+      - name: Reuse an existing GitHub OIDC provider
+        run: |
+          terraform -chdir="$BOOTSTRAP_DIR" state list > "$RUNNER_TEMP/bootstrap-resources"
+          # Preserva o provider gerenciado por este state nas próximas execuções.
+          if ! grep -Fq 'aws_iam_openid_connect_provider.github[0]' "$RUNNER_TEMP/bootstrap-resources"; then
+            provider_arn="arn:aws:iam::$AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+            aws iam list-open-id-connect-providers > "$RUNNER_TEMP/oidc-providers.json"
+            if jq -e --arg arn "$provider_arn" '.OpenIDConnectProviderList | any(.Arn == $arn)' "$RUNNER_TEMP/oidc-providers.json" > /dev/null; then
+              echo "TF_VAR_existing_github_oidc_provider_arn=$provider_arn" >> "$GITHUB_ENV"
+            fi
+          fi
+      - name: Format, validate and plan bootstrap
+        run: |
+          terraform -chdir="$BOOTSTRAP_DIR" fmt -check
+          terraform -chdir="$BOOTSTRAP_DIR" validate -no-color
+          terraform -chdir="$BOOTSTRAP_DIR" plan -input=false -no-color -lock-timeout=10m -out=bootstrap.tfplan
+          terraform -chdir="$BOOTSTRAP_DIR" show -json bootstrap.tfplan > "$RUNNER_TEMP/bootstrap-plan.json"
+          if jq -e 'any(.resource_changes[]?; .change.actions | index("delete"))' "$RUNNER_TEMP/bootstrap-plan.json" > /dev/null; then
+            echo "::error::O plano do bootstrap contém remoções. Revise o state e a configuração antes de aplicar."
+            exit 1
+          fi
+      - name: Apply S3 buckets and Terraform IAM roles
+        run: terraform -chdir="$BOOTSTRAP_DIR" apply -input=false -no-color -lock-timeout=10m bootstrap.tfplan
+      - name: Report environment variables and Kubernetes operator
+        run: |
+          terraform -chdir="$BOOTSTRAP_DIR" output -json github_environment_variables > "$RUNNER_TEMP/environment-variables.json"
+          {
+            echo '## Bootstrap concluído'
+            echo 'Buckets de homologação/produção e roles IAM preparados. Confira as Variables dos GitHub Environments:'
+            echo '```json'
+            cat "$RUNNER_TEMP/environment-variables.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          caller_arn=$(aws sts get-caller-identity --query Arn --output text)
+          if [[ "$caller_arn" == *:assumed-role/* ]]; then
+            role_name=${caller_arn#*:assumed-role/}
+            role_name=${role_name%%/*}
+            caller_arn=$(aws iam get-role --role-name "$role_name" --query Role.Arn --output text)
+          fi
+          if [[ "$caller_arn" == arn:aws:iam::*:user/* || "$caller_arn" == arn:aws:iam::*:role/* ]]; then
+            {
+              echo 'Se o deploy usar estas mesmas credenciais diretamente, configure TF_ADMIN_PRINCIPAL_ARNS nos Environments para autorizar este operador no Kubernetes:'
+              echo '```json'
+              jq -nc --arg arn "$caller_arn" '[$arn]'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo 'Depois, reexecute o workflow de merge (evento pull_request_target) para publicar infra e plataforma.' >> "$GITHUB_STEP_SUMMARY"
