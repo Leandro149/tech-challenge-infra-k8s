@@ -1,0 +1,25 @@
+aws_region         = "us-east-1"
+project_name       = "tech-challenge"
+environment        = "dev"
+kubernetes_version = "1.35"
+vpc_cidr           = "10.30.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Substitua pelo seu IP público de saída ou CIDR da rede do runner.
+cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
+
+# Substitua por sua role/user IAM. Não utilize ARN arn:aws:sts::...:assumed-role/...
+cluster_admin_principal_arns = ["arn:aws:iam::123456789012:role/TechChallengeAdmin"]
+
+node_groups = {
+  general = {
+    instance_types = ["t3.medium"]
+    capacity_type  = "ON_DEMAND"
+    min_size       = 2
+    desired_size   = 2
+    max_size       = 4
+    disk_size      = 20
+  }
+}
+
+tags = { Challenge = "TC3-06" }
