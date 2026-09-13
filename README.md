@@ -23,6 +23,7 @@ platform/                # Recursos Kubernetes e charts Helm
   tests/                 # Planos simulados, sem acessar um cluster
   terraform.tfvars.example
 docs/                    # Exemplo opcional de backend S3
+scripts/                 # Configuração local de acesso AWS por perfil
 .github/workflows/       # Validação automática de Terraform
 .specs/                  # Requisitos e decisões da entrega
 ```
@@ -53,6 +54,10 @@ Se a resposta retornar `arn:aws:sts::...:assumed-role/RoleName/session`, use o A
 
 ## 1. Configurar os parâmetros
 
+A conta deste projeto é **213284176265**, na região **us-east-1**. Para configurar autenticação e gerar ARN administrador/CIDRs automaticamente, siga [Acesso AWS](docs/aws-access.md). O script usa um perfil AWS CLI existente e gera arquivos `.auto.tfvars` locais; não provisiona recursos nem grava credenciais.
+
+`aws_account_id` restringe o provisionamento à conta configurada. O ARN `role/TechChallengeAdmin` no exemplo precisa ser substituído por uma role/user existente; essa role não é criada automaticamente.
+
 Na raiz do repositório:
 
 ```powershell
@@ -67,7 +72,7 @@ Edite os arquivos copiados:
 - Ao mudar `aws_region`, atualize também `availability_zones` para duas AZs da região escolhida.
 - Ajuste nome, ambiente, instâncias e tamanhos dos Node Groups conforme necessário. Os tipos de instância devem ser compatíveis com a AMI **x86_64** configurada.
 
-`203.0.113.10` e `123456789012` são placeholders. `0.0.0.0/0` é rejeitado para a API do EKS e para o ALB da demonstração. Se seu IP público mudar, atualize o CIDR do EKS em `infra/` antes de executar `platform/`.
+`203.0.113.10` e `role/TechChallengeAdmin` são placeholders. `0.0.0.0/0` é rejeitado para a API do EKS e para o ALB da demonstração. Se seu IP público mudar, atualize o CIDR do EKS em `infra/` antes de executar `platform/`.
 
 Os arquivos `terraform.tfvars`, states e planos são ignorados pelo Git. Os arquivos `.terraform.lock.hcl` são versionados para fixar as versões dos providers.
 
