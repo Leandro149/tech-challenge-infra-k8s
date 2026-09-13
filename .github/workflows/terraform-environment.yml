@@ -90,7 +90,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/terraform-config.mjs assert-current-merge
+      - name: Select AWS authentication mode
+        id: aws_auth_mode
+        env:
+          STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [[ -n "$STATIC_AWS_ACCESS_KEY_ID" && -n "$STATIC_AWS_SECRET_ACCESS_KEY" ]]; then
+            echo "static_credentials=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "static_credentials=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Authenticate to AWS using environment credentials
+        if: steps.aws_auth_mode.outputs.static_credentials == 'true'
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+          allowed-account-ids: "213284176265"
+          unset-current-credentials: true
+          mask-aws-account-id: false
       - name: Authenticate to AWS using OIDC
+        if: steps.aws_auth_mode.outputs.static_credentials == 'false'
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
           role-to-assume: ${{ inputs.mode == 'apply' && vars.AWS_ROLE_ARN || vars.AWS_PLAN_ROLE_ARN }}
