@@ -38,6 +38,9 @@ jobs:
       EKS_PUBLIC_ACCESS_CIDRS: ${{ vars.EKS_PUBLIC_ACCESS_CIDRS }}
       DEMO_INGRESS_CIDRS: ${{ vars.DEMO_INGRESS_CIDRS }}
       TF_ADMIN_PRINCIPAL_ARNS: ${{ vars.TF_ADMIN_PRINCIPAL_ARNS }}
+      STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACESS_KEY_ID || secrets.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEYID }}
+      STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_KEY_ID || secrets.AWS_SECRET_ACCESS_KEY_ID || secrets.AWS_SECRETKEY_ID }}
+      STATIC_AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN || secrets.AWS_TOKEN || secrets.AWS_SESSION }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,9 +95,6 @@ jobs:
         run: node scripts/ci/terraform-config.mjs assert-current-merge
       - name: Select AWS authentication mode
         id: aws_auth_mode
-        env:
-          STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           if [[ -n "$STATIC_AWS_ACCESS_KEY_ID" && -n "$STATIC_AWS_SECRET_ACCESS_KEY" ]]; then
             echo "static_credentials=true" >> "$GITHUB_OUTPUT"
@@ -105,9 +105,9 @@ jobs:
         if: steps.aws_auth_mode.outputs.static_credentials == 'true'
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-access-key-id: ${{ env.STATIC_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.STATIC_AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.STATIC_AWS_SESSION_TOKEN }}
           aws-region: us-east-1
           allowed-account-ids: "213284176265"
           unset-current-credentials: true
