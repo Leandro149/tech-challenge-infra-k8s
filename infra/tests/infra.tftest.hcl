@@ -106,3 +106,26 @@ run "reject_invalid_account_id" {
 
   expect_failures = [var.aws_account_id]
 }
+
+run "readonly_cluster_access" {
+  command = plan
+
+  variables {
+    cluster_readonly_principal_arns = ["arn:aws:iam::123456789012:role/TerraformPlan"]
+  }
+
+  assert {
+    condition     = aws_eks_access_entry.readonly["arn:aws:iam::123456789012:role/TerraformPlan"].kubernetes_groups == toset(["terraform-plan"])
+    error_message = "A role de plan deve usar o grupo RBAC somente leitura."
+  }
+}
+
+run "reject_admin_as_readonly" {
+  command = plan
+
+  variables {
+    cluster_readonly_principal_arns = ["arn:aws:iam::123456789012:role/TechChallengeAdmin"]
+  }
+
+  expect_failures = [var.cluster_readonly_principal_arns]
+}

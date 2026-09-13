@@ -7,6 +7,7 @@ override_data {
   values = {
     outputs = {
       aws_region                        = "us-east-1"
+      environment                       = "hml"
       cluster_name                      = "tech-challenge-dev"
       cluster_endpoint                  = "https://test.eks.amazonaws.com"
       cluster_ca_certificate            = "dGVzdC1jYQ=="
@@ -99,4 +100,34 @@ run "reject_open_demo_ingress" {
   }
 
   expect_failures = [var.demo_ingress_cidrs]
+}
+
+run "production_without_demo" {
+  command = plan
+
+  variables {
+    enable_demo          = false
+    demo_ingress_cidrs   = []
+    expected_environment = "hml"
+  }
+
+  assert {
+    condition     = length(kubernetes_ingress_v1.demo) == 0
+    error_message = "A plataforma sem demonstração não deve exigir CIDR de ALB."
+  }
+
+  assert {
+    condition     = kubernetes_cluster_role_v1.terraform_plan.rule[0].verbs == tolist(["get", "list", "watch"])
+    error_message = "A role Kubernetes de plan não deve permitir escrita."
+  }
+}
+
+run "reject_wrong_infra_environment" {
+  command = plan
+
+  variables {
+    expected_environment = "prod"
+  }
+
+  expect_failures = [data.terraform_remote_state.infra]
 }

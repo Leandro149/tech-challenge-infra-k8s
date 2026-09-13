@@ -89,6 +89,21 @@ variable "cluster_admin_principal_arns" {
   }
 }
 
+variable "cluster_readonly_principal_arns" {
+  description = "Roles/users IAM de plan; grupo terraform-plan com RBAC somente leitura criado em platform/."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for arn in var.cluster_readonly_principal_arns :
+      can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:(role|user)/.+$", arn)) &&
+      !contains(var.cluster_admin_principal_arns, arn)
+    ])
+    error_message = "Use ARNs IAM válidos, distintos dos administradores do cluster."
+  }
+}
+
 variable "node_groups" {
   description = "Managed Node Groups. HPA escala pods; capacidade dos nodes é configurada aqui."
   type = map(object({

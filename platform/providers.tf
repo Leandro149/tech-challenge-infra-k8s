@@ -2,6 +2,13 @@
 data "terraform_remote_state" "infra" {
   backend = var.infra_state_backend
   config  = var.infra_state_config
+
+  lifecycle {
+    postcondition {
+      condition     = var.expected_environment == null || try(self.outputs.environment, null) == var.expected_environment
+      error_message = "O state de infra não corresponde ao ambiente esperado. Confira bucket/key e aplique os outputs de infra."
+    }
+  }
 }
 
 locals {

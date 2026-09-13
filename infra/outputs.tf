@@ -1,3 +1,8 @@
+output "environment" {
+  description = "Ambiente do cluster, usado para conferir a leitura do state."
+  value       = var.environment
+}
+
 output "aws_region" {
   description = "Região do cluster."
   value       = var.aws_region

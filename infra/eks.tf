@@ -49,6 +49,15 @@ resource "aws_eks_access_policy_association" "admin" {
   }
 }
 
+resource "aws_eks_access_entry" "readonly" {
+  for_each = var.cluster_readonly_principal_arns
+
+  cluster_name      = aws_eks_cluster.this.name
+  principal_arn     = each.key
+  type              = "STANDARD"
+  kubernetes_groups = ["terraform-plan"]
+}
+
 data "aws_eks_addon_version" "this" {
   for_each = toset(["vpc-cni", "kube-proxy", "coredns"])
 

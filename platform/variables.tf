@@ -1,3 +1,9 @@
+variable "expected_environment" {
+  description = "Ambiente esperado no state de infra/; null mantém compatibilidade com execução local."
+  type        = string
+  default     = null
+}
+
 variable "infra_state_backend" {
   description = "Backend do state de infra/: local ou s3."
   type        = string
@@ -56,9 +62,10 @@ variable "demo_image" {
 variable "demo_ingress_cidrs" {
   description = "CIDRs que podem acessar o ALB da demonstração por HTTP."
   type        = list(string)
+  default     = []
 
   validation {
-    condition = length(var.demo_ingress_cidrs) > 0 && alltrue([
+    condition = (!var.enable_demo || length(var.demo_ingress_cidrs) > 0) && alltrue([
       for cidr in var.demo_ingress_cidrs : can(cidrnetmask(cidr)) && cidr != "0.0.0.0/0"
     ])
     error_message = "Informe CIDRs IPv4 restritos e válidos; 0.0.0.0/0 não é permitido."
