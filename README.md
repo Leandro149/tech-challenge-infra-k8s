@@ -261,7 +261,7 @@ terraform -chdir=infra plan -destroy -out=destroy.tfplan
 terraform -chdir=infra apply destroy.tfplan
 ```
 
-EKS, EC2, NAT Gateway, ALB, IPv4 público, tráfego e logs geram custos enquanto existirem. A configuração usa um único NAT Gateway para o ambiente acadêmico, concentrando a saída em uma AZ e podendo gerar tráfego entre AZs. Para produção, revisar saída por AZ, requisitos de disponibilidade, logs, HTTPS e políticas de acesso
+EKS, EC2, NAT Gateway, ALB, IPv4 público, tráfego e logs geram custos enquanto existirem. A configuração usa um único NAT Gateway para o ambiente acadêmico, concentrando a saída em uma AZ e podendo gerar tráfego entre AZs. Para produção, revisar saída por AZ, requisitos de disponibilidade, logs, HTTPS e políticas de acesso.
 
 ## Referências
 
