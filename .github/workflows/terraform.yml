@@ -1,22 +1,35 @@
-name: Terraform validation
+name: Terraform CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Usa o contexto da base apenas depois do merge; não executa código de PR aberta.
+  pull_request_target:
+    branches: [develop, main]
+    types: [closed]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente para plan (develop=homologacao, main=producao)"
+        required: true
+        type: choice
+        options: [homologacao, producao]
 
 permissions:
   contents: read
 
 jobs:
   validate:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     name: Validate ${{ matrix.directory }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        directory: [infra, platform]
+        directory: [bootstrap, infra, platform]
     defaults:
       run:
         working-directory: ${{ matrix.directory }}
@@ -41,3 +54,47 @@ jobs:
 
       - name: Test plans with mock providers
         run: terraform test -no-color
+
+  pipeline-tests:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    name: Test pipeline routing and configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test tests/ci/terraform-config.test.mjs
+
+  route:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    name: Select environment and operation
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.route.outputs.enabled }}
+      environment: ${{ steps.route.outputs.environment }}
+      mode: ${{ steps.route.outputs.mode }}
+      checkout_ref: ${{ steps.route.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Route PR, merge or manual plan
+        id: route
+        run: node scripts/ci/terraform-config.mjs route
+
+  terraform:
+    name: Terraform ${{ needs.route.outputs.environment }}
+    needs: [validate, pipeline-tests, route]
+    if: needs.route.outputs.enabled == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/terraform-environment.yml
+    with:
+      environment: ${{ needs.route.outputs.environment }}
+      mode: ${{ needs.route.outputs.mode }}
+      checkout_ref: ${{ needs.route.outputs.checkout_ref }}
