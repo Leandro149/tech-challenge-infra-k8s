@@ -50,6 +50,14 @@ function validateCidrs(cidrs, name, required) {
   }
 }
 
+function validateRunnerLabels(labels) {
+  const selfHostedLinux = labels.includes('self-hosted') && labels.includes('linux');
+  const githubHostedLinux = labels.length === 1 && labels[0] === 'ubuntu-latest';
+  if (!selfHostedLinux && !githubHostedLinux) {
+    throw new Error('TF_RUNNER_LABELS: use ["ubuntu-latest"] ou labels de um runner self-hosted Linux.');
+  }
+}
+
 export function ipInCidr(ip, cidr) {
   if (!isIPv4(ip)) return false;
   const [network, prefix] = cidr.split('/');
@@ -83,7 +91,7 @@ export function loadConfiguration(environment, variables, root = repositoryRoot)
     throw new Error('TF_STATE_BUCKET não corresponde ao ambiente. Use o bucket informado pelo bootstrap.');
   }
   const labels = jsonArray(variables.TF_RUNNER_LABELS, 'TF_RUNNER_LABELS');
-  if (!labels.includes('self-hosted') || !labels.includes('linux')) throw new Error('Use um runner self-hosted Linux com IP de saída fixo.');
+  validateRunnerLabels(labels);
   const endpointCidrs = jsonArray(variables.EKS_PUBLIC_ACCESS_CIDRS, 'EKS_PUBLIC_ACCESS_CIDRS');
   validateCidrs(endpointCidrs, 'EKS_PUBLIC_ACCESS_CIDRS', true);
   const demoCidrs = jsonArray(variables.DEMO_INGRESS_CIDRS, 'DEMO_INGRESS_CIDRS', !platform.enable_demo);

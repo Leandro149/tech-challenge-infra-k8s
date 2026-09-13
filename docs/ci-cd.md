@@ -62,7 +62,19 @@ Nesta configuração acadêmica, as permissões de EC2/EKS da role de apply abra
 
 ## 2. Preparar os runners
 
-Os jobs AWS precisam de **runners self-hosted Linux com IP público de saída fixo**, registrados neste repositório. Instale AWS CLI v2 e Bash. Terraform 1.13.5 e Node 22 são instalados pelas actions. O runner precisa acessar GitHub, AWS APIs, Terraform Registry, repositórios Helm e a API pública do EKS por HTTPS.
+Os jobs AWS podem rodar em `ubuntu-latest` para o ambiente acadêmico ou em **runners self-hosted Linux com IP público de saída fixo** para uma configuração mais controlada. Terraform 1.13.5 e Node 22 são instalados pelas actions. O runner precisa acessar GitHub, AWS APIs, Terraform Registry, repositórios Helm e a API pública do EKS por HTTPS.
+
+Para evitar configurar uma máquina self-hosted, use:
+
+```json
+["ubuntu-latest"]
+```
+
+Nesse modo, o IP de saída do GitHub Actions pode variar. Configure `EKS_PUBLIC_ACCESS_CIDRS` com os dois blocos abaixo para permitir que a checagem de IP e o acesso inicial ao EKS funcionem:
+
+```json
+["0.0.0.0/1", "128.0.0.0/1"]
+```
 
 Sugestão de labels:
 
@@ -74,9 +86,9 @@ Sugestão de labels:
 ["self-hosted", "linux", "x64", "terraform-prod"]
 ```
 
-O runner de provisionamento deve existir fora do cluster EKS que ele cria. O runner pode usar saída por NAT com Elastic IP. Seu IP de saída precisa constar em `EKS_PUBLIC_ACCESS_CIDRS`; inclua também o IP/rede dos operadores que administrarão o Kubernetes.
+Se optar por self-hosted, o runner de provisionamento deve existir fora do cluster EKS que ele cria. O runner pode usar saída por NAT com Elastic IP. Seu IP de saída precisa constar em `EKS_PUBLIC_ACCESS_CIDRS`; inclua também o IP/rede dos operadores que administrarão o Kubernetes.
 
-O pipeline confere o IP real via `checkip.amazonaws.com` e falha se ele não estiver autorizado. Não adiciona IPs à VPC/EKS durante um plano de PR. Runners hospedados padrão têm IP variável, portanto não atendem a essa configuração de rede.
+O pipeline confere o IP real via `checkip.amazonaws.com` e falha se ele não estiver autorizado. Não adiciona IPs à VPC/EKS durante um plano de PR.
 
 ## 3. Configurar os GitHub Environments
 
