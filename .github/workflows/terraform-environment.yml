@@ -53,7 +53,7 @@ jobs:
   terraform:
     name: ${{ inputs.mode }} ${{ inputs.environment }}
     needs: prepare
-    runs-on: ${{ fromJSON(needs.prepare.outputs.runner_labels) }}
+    runs-on: ubuntu-latest
     environment: ${{ inputs.mode == 'plan' && format('{0}-plan', inputs.environment) || inputs.environment }}
     timeout-minutes: 90
     permissions:
