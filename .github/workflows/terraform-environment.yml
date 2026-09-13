@@ -1,0 +1,141 @@
+name: Terraform environment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      mode:
+        required: true
+        type: string
+      checkout_ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  CI_ENVIRONMENT: ${{ inputs.environment }}
+  CI_MODE: ${{ inputs.mode }}
+  CI_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+
+jobs:
+  prepare:
+    name: Check configuration
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.mode == 'plan' && format('{0}-plan', inputs.environment) || inputs.environment }}
+    outputs:
+      runner_labels: ${{ steps.config.outputs.runner_labels }}
+    env:
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_RUNNER_LABELS: ${{ vars.TF_RUNNER_LABELS }}
+      EKS_PUBLIC_ACCESS_CIDRS: ${{ vars.EKS_PUBLIC_ACCESS_CIDRS }}
+      DEMO_INGRESS_CIDRS: ${{ vars.DEMO_INGRESS_CIDRS }}
+      TF_ADMIN_PRINCIPAL_ARNS: ${{ vars.TF_ADMIN_PRINCIPAL_ARNS }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate event and environment variables
+        id: config
+        run: node scripts/ci/terraform-config.mjs prepare
+
+  terraform:
+    name: ${{ inputs.mode }} ${{ inputs.environment }}
+    needs: prepare
+    runs-on: ${{ fromJSON(needs.prepare.outputs.runner_labels) }}
+    environment: ${{ inputs.mode == 'plan' && format('{0}-plan', inputs.environment) || inputs.environment }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: terraform-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.mode }}
+      cancel-in-progress: false
+    env:
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_RUNNER_LABELS: ${{ vars.TF_RUNNER_LABELS }}
+      EKS_PUBLIC_ACCESS_CIDRS: ${{ vars.EKS_PUBLIC_ACCESS_CIDRS }}
+      DEMO_INGRESS_CIDRS: ${{ vars.DEMO_INGRESS_CIDRS }}
+      TF_ADMIN_PRINCIPAL_ARNS: ${{ vars.TF_ADMIN_PRINCIPAL_ARNS }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+          terraform_wrapper: false
+      - name: Prevent deployment of a superseded merge
+        if: inputs.mode == 'apply'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/terraform-config.mjs assert-current-merge
+      - name: Authenticate to AWS using OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ inputs.mode == 'apply' && vars.AWS_ROLE_ARN || vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+          allowed-account-ids: "213284176265"
+          role-session-name: terraform-${{ github.run_id }}
+          role-duration-seconds: 7200
+          unset-current-credentials: true
+          mask-aws-account-id: false
+      - name: Prepare isolated Terraform directories and verify runner IP
+        id: config
+        run: node scripts/ci/terraform-config.mjs render
+      - name: Initialize and validate AWS infrastructure
+        env:
+          INFRA_DIR: ${{ steps.config.outputs.infra_dir }}
+        run: |
+          terraform -chdir="$INFRA_DIR" init -input=false -lockfile=readonly -backend-config=backend.hcl
+          terraform -chdir="$INFRA_DIR" validate -no-color
+      - name: Plan AWS infrastructure
+        env:
+          INFRA_DIR: ${{ steps.config.outputs.infra_dir }}
+        run: node scripts/ci/terraform-config.mjs plan infra
+      - name: Apply AWS infrastructure after merge
+        if: inputs.mode == 'apply'
+        env:
+          INFRA_DIR: ${{ steps.config.outputs.infra_dir }}
+        run: terraform -chdir="$INFRA_DIR" apply -input=false -no-color -lock-timeout=10m tfplan
+      - name: Check whether platform can be planned before merge
+        if: inputs.mode == 'plan'
+        id: platform_state
+        run: node scripts/ci/terraform-config.mjs platform-ready
+      - name: Initialize and validate Kubernetes platform
+        if: inputs.mode == 'apply' || steps.platform_state.outputs.ready == 'true'
+        env:
+          PLATFORM_DIR: ${{ steps.config.outputs.platform_dir }}
+        run: |
+          terraform -chdir="$PLATFORM_DIR" init -input=false -lockfile=readonly -backend-config=backend.hcl
+          terraform -chdir="$PLATFORM_DIR" validate -no-color
+      - name: Plan Kubernetes platform
+        if: inputs.mode == 'apply' || steps.platform_state.outputs.ready == 'true'
+        env:
+          PLATFORM_DIR: ${{ steps.config.outputs.platform_dir }}
+        run: node scripts/ci/terraform-config.mjs plan platform
+      - name: Apply Kubernetes platform after merge
+        if: inputs.mode == 'apply'
+        env:
+          PLATFORM_DIR: ${{ steps.config.outputs.platform_dir }}
+        run: terraform -chdir="$PLATFORM_DIR" apply -input=false -no-color -lock-timeout=10m tfplan
