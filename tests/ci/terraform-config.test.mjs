@@ -161,3 +161,45 @@ test('queued old merges cannot overwrite a newer deployment', async () => {
   await assert.rejects(assertCurrentMerge(context, response('newer-sha')), /substituído/);
   await assert.rejects(assertCurrentMerge(context, async () => ({ ok: false })), /Não foi possível/);
 });
+
+test('bootstrap handles first execution and preserves errors and managed OIDC providers', t => {
+  const bash = process.platform === 'win32' ? join(process.env.ProgramFiles ?? 'C:/Program Files', 'Git/bin/bash.exe') : 'bash';
+  if (process.platform === 'win32' && !existsSync(bash)) return t.skip('Git Bash não está instalado.');
+  const workflow = readFileSync('.github/workflows/terraform-bootstrap.yml', 'utf8');
+  const block = workflow.match(/- name: Reuse an existing GitHub OIDC provider\r?\n        run: \|\r?\n([\s\S]*?)(?=      - name:)/);
+  assert.ok(block, 'Etapa de reutilização de OIDC deve existir.');
+  const script = block[1].split(/\r?\n/).map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+  const scenarios = [
+    { name: 'first-run', exit: '1', error: 'No state file was found!', expected: 0, discover: true },
+    { name: 'access-denied', exit: '1', error: 'AccessDenied: S3 returned 403', expected: 1, discover: false },
+    { name: 'invalid-state', exit: '1', error: 'Error: invalid state JSON', expected: 1, discover: false },
+    { name: 'managed-provider', exit: '0', output: 'aws_iam_openid_connect_provider.github[0]', expected: 0, discover: false },
+    { name: 'reuse-provider', exit: '0', expected: 0, discover: true, existingProvider: true },
+  ];
+  for (const scenario of scenarios) {
+    const root = mkdtempSync(join(tmpdir(), 'tc3-bootstrap-test-'));
+    const portable = value => value.replaceAll('\\', '/');
+    const calls = join(root, 'aws-calls');
+    const githubEnv = join(root, 'github-env');
+    const scriptPath = join(root, 'verify.sh');
+    writeFileSync(scriptPath, `
+terraform() {
+  printf '%s\\n' "$MOCK_STATE_OUTPUT"
+  printf '%s\\n' "$MOCK_STATE_ERROR" >&2
+  return "$MOCK_STATE_EXIT"
+}
+aws() { printf 'called\\n' >> "$MOCK_CALLS"; printf '{}\\n'; }
+jq() { return "$MOCK_PROVIDER_EXIT"; }
+${script}`);
+    const result = spawnSync(bash, ['-e', portable(scriptPath)], { encoding: 'utf8', env: {
+      ...process.env, RUNNER_TEMP: portable(root), BOOTSTRAP_DIR: portable(root),
+      GITHUB_ENV: portable(githubEnv), AWS_ACCOUNT_ID: '213284176265', MOCK_CALLS: portable(calls),
+      MOCK_STATE_OUTPUT: scenario.output ?? '', MOCK_STATE_ERROR: scenario.error ?? '',
+      MOCK_STATE_EXIT: scenario.exit, MOCK_PROVIDER_EXIT: scenario.existingProvider ? '0' : '1',
+    } });
+    assert.equal(result.status, scenario.expected, `${scenario.name}: ${result.stderr}`);
+    assert.equal(existsSync(calls), scenario.discover, scenario.name);
+    if (scenario.existingProvider) assert.match(readFileSync(githubEnv, 'utf8'), /TF_VAR_existing_github_oidc_provider_arn=/);
+    if (scenario.expected === 1) assert.match(result.stderr, new RegExp(scenario.error));
+  }
+});
