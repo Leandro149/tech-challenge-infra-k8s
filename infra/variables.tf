@@ -1,3 +1,14 @@
+variable "aws_account_id" {
+  description = "Conta AWS autorizada para provisionamento; null desativa a restrição."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_account_id == null || can(regex("^[0-9]{12}$", var.aws_account_id))
+    error_message = "Informe um ID de conta AWS com 12 dígitos."
+  }
+}
+
 variable "aws_region" {
   description = "Região AWS."
   type        = string

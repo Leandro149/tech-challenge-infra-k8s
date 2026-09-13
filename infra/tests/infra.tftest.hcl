@@ -96,3 +96,13 @@ run "reject_invalid_node_capacity" {
 
   expect_failures = [var.node_groups]
 }
+
+run "reject_invalid_account_id" {
+  command = plan
+
+  variables {
+    aws_account_id = "123"
+  }
+
+  expect_failures = [var.aws_account_id]
+}

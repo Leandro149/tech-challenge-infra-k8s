@@ -1,3 +1,4 @@
+aws_account_id     = "213284176265"
 aws_region         = "us-east-1"
 project_name       = "tech-challenge"
 environment        = "dev"
@@ -9,7 +10,7 @@ availability_zones = ["us-east-1a", "us-east-1b"]
 cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
 
 # Substitua por sua role/user IAM. Não utilize ARN arn:aws:sts::...:assumed-role/...
-cluster_admin_principal_arns = ["arn:aws:iam::123456789012:role/TechChallengeAdmin"]
+cluster_admin_principal_arns = ["arn:aws:iam::213284176265:role/TechChallengeAdmin"]
 
 node_groups = {
   general = {
