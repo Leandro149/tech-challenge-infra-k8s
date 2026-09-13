@@ -65,10 +65,19 @@ test('wrong account, reused bucket and environment roles fail before planning', 
   assert.throws(() => loadConfiguration('homologacao', variables('prod')), /não corresponde/);
 });
 
-test('network configuration rejects broad CIDRs and hosted runners', () => {
+test('network configuration rejects broad CIDRs and invalid runners', () => {
   assert.throws(() => loadConfiguration('homologacao', { ...variables(), EKS_PUBLIC_ACCESS_CIDRS: '["0.0.0.0/0"]' }), /restritos/);
   assert.throws(() => loadConfiguration('homologacao', { ...variables(), EKS_PUBLIC_ACCESS_CIDRS: 'invalid' }), /array JSON/);
-  assert.throws(() => loadConfiguration('homologacao', { ...variables(), TF_RUNNER_LABELS: '["ubuntu-latest"]' }), /self-hosted/);
+  assert.throws(() => loadConfiguration('homologacao', { ...variables(), TF_RUNNER_LABELS: '["windows-latest"]' }), /TF_RUNNER_LABELS/);
+});
+
+test('network configuration allows GitHub hosted Ubuntu runners for academic environments', () => {
+  const config = loadConfiguration('homologacao', {
+    ...variables(),
+    TF_RUNNER_LABELS: '["ubuntu-latest"]',
+    EKS_PUBLIC_ACCESS_CIDRS: '["0.0.0.0/1","128.0.0.0/1"]',
+  });
+  assert.deepEqual(config.labels, ['ubuntu-latest']);
 });
 
 test('render excludes local tfvars, caches and credentials from temporary roots', () => {
