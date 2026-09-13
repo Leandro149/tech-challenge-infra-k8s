@@ -1,0 +1,19 @@
+infra_state_backend = "local"
+infra_state_config  = { path = "../infra/terraform.tfstate" }
+
+namespaces         = ["tech-challenge", "observability"]
+enable_demo        = true
+demo_namespace     = "tech-challenge"
+demo_ingress_cidrs = ["203.0.113.10/32"] # Substitua pelo IP público de saída do operador.
+
+# Para a aplicação real: publicar o Deployment pelo repositório da aplicação
+# e configurar requests.cpu em todos os containers. Em seguida, definir o HPA:
+# hpa_workloads = {
+#   api = {
+#     namespace       = "tech-challenge"
+#     deployment_name = "api"
+#     min_replicas    = 2
+#     max_replicas    = 5
+#     cpu_utilization = 70
+#   }
+# }
