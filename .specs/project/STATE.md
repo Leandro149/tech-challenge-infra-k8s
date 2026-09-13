@@ -45,6 +45,14 @@ Nenhum recurso AWS foi criado. Testes simulados e validação sintática não co
 
 ## TC3-09 — CI/CD
 
+### Bootstrap manual pelo GitHub (2026-09-13)
+
+- Run de PR 34788543879 autenticou com secrets, mas falhou no init por NoSuchBucket no bucket de produção.
+- Workflow Terraform bootstrap adicionada: execução manual em main com Environment producao, armazenamento remoto separado e persistente, reutilização de provider OIDC e plan/apply de S3/IAM antes do deploy.
+- Operador deve executar bootstrap com credenciais S3/IAM autorizadas, configurar Variables do resumo e reexecutar o run de merge. Nenhum bucket foi criado nesta sessão local.
+- State local anterior precisa ser migrado antes de usar bootstrap remoto; não há importação automática de recursos existentes.
+- Verificação local: actionlint aprovado, seis scripts Bash com sintaxe válida, quatro cenários de credenciais e HCL do backend verificados, 14 testes Node aprovados. Não foram feitas chamadas AWS nesses testes.
+
 - develop -> homologacao/hml; main -> producao/prod. Buckets, VPCs, clusters, roles e configurações diferentes.
 - Push executa somente CI. PR interna executa plan; closed/merged executa novo plan/apply no commit de merge. Forks sem plan AWS antes do merge; manual somente plan.
 - Reusable workflow com preflight, OIDC plan/apply, diretórios temporários sem tfvars locais, locking S3 e grupos de concorrência por ambiente/operação.

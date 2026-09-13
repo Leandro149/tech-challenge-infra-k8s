@@ -36,6 +36,20 @@ Os arquivos em `environments/` possuem somente configuração não secreta e sã
 
 ## 1. Aplicar o bootstrap uma vez
 
+### Pelo GitHub Actions
+
+Para preparar S3/IAM sem instalar Terraform localmente, execute **Actions → Terraform bootstrap → Run workflow → main**. A workflow deve estar mesclada em `main`. Ela usa os Secrets AWS do Environment `producao`, com permissões de criação/configuração de S3 e IAM; a role de deploy dos clusters não possui as permissões necessárias ao bootstrap.
+
+A execução prepara um bucket privado separado, `tech-challenge-tfstate-213284176265-bootstrap`, com criptografia, versionamento e TLS obrigatório, para guardar o state em `bootstrap/terraform.tfstate`. Depois executa init, fmt, validate, plan e apply de `bootstrap/`, criando os buckets de homologação/produção e as roles. Reutiliza um provider GitHub OIDC existente e não aplica planos que contenham remoções. O bucket do próprio bootstrap é preparado via AWS CLI antes do Terraform e não é gerenciado pelo state dos clusters.
+
+Confira as Variables no resumo da execução. Ao usar credenciais diretamente no deploy, copie também o `TF_ADMIN_PRINCIPAL_ARNS` sugerido para autorizar essa identidade no Kubernetes. Em seguida, reexecute o run do merge com evento `pull_request_target`; o run de push executa somente validações e o run de PR executa somente plan.
+
+Se o primeiro plan do PR falhar com `NoSuchBucket`, falta executar o bootstrap. Após mesclar esta configuração, execute a workflow manual antes de reexecutar o deploy. Uma autenticação bem-sucedida não cria o bucket automaticamente.
+
+Se já aplicou bootstrap localmente, preserve e migre seu state para esse backend antes de usar a workflow. Ela não importa automaticamente recursos existentes nem utiliza states locais. Não alterne entre bootstrap local e remoto sem migrar o state.
+
+### Pelo computador
+
 Use uma identidade AWS autorizada a criar buckets, provider OIDC, roles e políticas IAM. Configure antes a AWS CLI conforme [Acesso AWS](aws-access.md).
 
 ```powershell
