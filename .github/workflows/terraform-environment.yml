@@ -38,9 +38,6 @@ jobs:
       EKS_PUBLIC_ACCESS_CIDRS: ${{ vars.EKS_PUBLIC_ACCESS_CIDRS }}
       DEMO_INGRESS_CIDRS: ${{ vars.DEMO_INGRESS_CIDRS }}
       TF_ADMIN_PRINCIPAL_ARNS: ${{ vars.TF_ADMIN_PRINCIPAL_ARNS }}
-      STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACESS_KEY_ID || secrets.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEYID }}
-      STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_KEY_ID || secrets.AWS_SECRET_ACCESS_KEY_ID || secrets.AWS_SECRETKEY_ID }}
-      STATIC_AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN || secrets.AWS_TOKEN || secrets.AWS_SESSION }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,7 +61,7 @@ jobs:
       id-token: write
     concurrency:
       group: terraform-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.mode }}
-      cancel-in-progress: true
+      cancel-in-progress: ${{ inputs.mode == 'plan' }}
     env:
       AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
       AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
@@ -73,6 +70,9 @@ jobs:
       EKS_PUBLIC_ACCESS_CIDRS: ${{ vars.EKS_PUBLIC_ACCESS_CIDRS }}
       DEMO_INGRESS_CIDRS: ${{ vars.DEMO_INGRESS_CIDRS }}
       TF_ADMIN_PRINCIPAL_ARNS: ${{ vars.TF_ADMIN_PRINCIPAL_ARNS }}
+      STATIC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACESS_KEY_ID || secrets.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEYID }}
+      STATIC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_KEY_ID || secrets.AWS_SECRET_ACCESS_KEY_ID || secrets.AWS_SECRETKEY_ID }}
+      STATIC_AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN || secrets.AWS_TOKEN || secrets.AWS_SESSION }}
     defaults:
       run:
         shell: bash
@@ -96,6 +96,16 @@ jobs:
       - name: Select AWS authentication mode
         id: aws_auth_mode
         run: |
+          if [[ -n "$STATIC_AWS_ACCESS_KEY_ID" || -n "$STATIC_AWS_SECRET_ACCESS_KEY" || -n "$STATIC_AWS_SESSION_TOKEN" ]]; then
+            if [[ -z "$STATIC_AWS_ACCESS_KEY_ID" || -z "$STATIC_AWS_SECRET_ACCESS_KEY" ]]; then
+              echo "::error::Configure AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY nos Secrets do Environment deste job."
+              exit 1
+            fi
+            if [[ "$STATIC_AWS_ACCESS_KEY_ID" == ASIA* && -z "$STATIC_AWS_SESSION_TOKEN" ]]; then
+              echo "::error::Credenciais AWS temporárias exigem AWS_SESSION_TOKEN nos Secrets do mesmo Environment."
+              exit 1
+            fi
+          fi
           if [[ -n "$STATIC_AWS_ACCESS_KEY_ID" && -n "$STATIC_AWS_SECRET_ACCESS_KEY" ]]; then
             echo "static_credentials=true" >> "$GITHUB_OUTPUT"
           else
