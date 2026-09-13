@@ -61,7 +61,7 @@ jobs:
       id-token: write
     concurrency:
       group: terraform-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.mode }}
-      cancel-in-progress: false
+      cancel-in-progress: true
     env:
       AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
       AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
