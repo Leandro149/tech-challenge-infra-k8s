@@ -156,9 +156,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           caller_arn=$(aws sts get-caller-identity --query Arn --output text)
           if [[ "$caller_arn" == *:assumed-role/* ]]; then
+            account_id=${caller_arn#arn:aws:sts::}
+            account_id=${account_id%%:*}
             role_name=${caller_arn#*:assumed-role/}
             role_name=${role_name%%/*}
-            caller_arn=$(aws iam get-role --role-name "$role_name" --query Role.Arn --output text)
+            caller_arn="arn:aws:iam::$account_id:role/$role_name"
           fi
           if [[ "$caller_arn" == arn:aws:iam::*:user/* || "$caller_arn" == arn:aws:iam::*:role/* ]]; then
             {
