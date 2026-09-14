@@ -175,6 +175,7 @@ test('bootstrap handles first execution and preserves errors and managed OIDC pr
     { name: 'invalid-state', exit: '1', error: 'Error: invalid state JSON', expected: 1, discover: false },
     { name: 'managed-provider', exit: '0', output: 'aws_iam_openid_connect_provider.github[0]', expected: 0, discover: false },
     { name: 'reuse-provider', exit: '0', expected: 0, discover: true, existingProvider: true },
+    { name: 'static-credentials-mode', exit: '0', expected: 0, discover: false, manageOidc: 'false' },
   ];
   for (const scenario of scenarios) {
     const root = mkdtempSync(join(tmpdir(), 'tc3-bootstrap-test-'));
@@ -199,6 +200,7 @@ ${script}`);
       MOCK_TERRAFORM_CALLS: portable(terraformCalls),
       MOCK_STATE_OUTPUT: scenario.output ?? '', MOCK_STATE_ERROR: scenario.error ?? '',
       MOCK_STATE_EXIT: scenario.exit, MOCK_PROVIDER_EXIT: scenario.existingProvider ? '0' : '1',
+      TF_VAR_manage_github_oidc_roles: scenario.manageOidc ?? 'true',
     } });
     assert.equal(result.status, scenario.expected, `${scenario.name}: ${result.stderr}`);
     assert.equal(existsSync(calls), scenario.discover, scenario.name);

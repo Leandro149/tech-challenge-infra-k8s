@@ -32,3 +32,9 @@ variable "existing_github_oidc_provider_arn" {
   description = "ARN do provider GitHub existente na conta; null cria um provider."
   default     = null
 }
+
+variable "manage_github_oidc_roles" {
+  type        = bool
+  description = "Cria provider OIDC GitHub e roles de plan/apply. Desative em contas acadêmicas que usam secrets AWS estáticos e bloqueiam IAM OIDC."
+  default     = true
+}

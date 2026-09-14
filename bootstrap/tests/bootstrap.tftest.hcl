@@ -51,3 +51,21 @@ run "reuse_existing_github_provider" {
     error_message = "Um provider existente deve ser reutilizado."
   }
 }
+
+run "static_credentials_mode_skips_github_oidc_roles" {
+  command = plan
+
+  variables {
+    manage_github_oidc_roles = false
+  }
+
+  assert {
+    condition     = length(aws_iam_openid_connect_provider.github) == 0 && length(aws_iam_role.terraform) == 0
+    error_message = "Modo com secrets AWS estáticos não deve criar provider OIDC GitHub nem roles de pipeline."
+  }
+
+  assert {
+    condition     = output.github_environment_variables["producao"].AWS_ROLE_ARN == "arn:aws:iam::213284176265:role/tech-challenge-prod-terraform-apply"
+    error_message = "Outputs devem continuar informando os valores esperados para as Variables do GitHub."
+  }
+}

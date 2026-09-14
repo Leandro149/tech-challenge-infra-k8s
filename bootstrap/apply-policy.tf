@@ -1,5 +1,5 @@
 locals {
-  apply_roles = { for name, role in local.roles : name => role if role.mode == "apply" }
+  apply_roles = { for name, role in local.managed_roles : name => role if role.mode == "apply" }
   application_roles = {
     for name, role in local.apply_roles : name => [
       for suffix in ["cluster", "nodes", "vpc-cni", "aws-load-balancer-controller"] :
