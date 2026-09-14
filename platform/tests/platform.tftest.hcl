@@ -25,6 +25,11 @@ run "demo_with_alb_and_hpa" {
   command = plan
 
   assert {
+    condition     = kubernetes_horizontal_pod_autoscaler_v2.this["tc3-demo"].spec[0].behavior[0].scale_up[0].select_policy == "Max" && kubernetes_horizontal_pod_autoscaler_v2.this["tc3-demo"].spec[0].behavior[0].scale_down[0].select_policy == "Max"
+    error_message = "As duas direções do HPA devem enviar selectPolicy válido à API Kubernetes."
+  }
+
+  assert {
     condition     = length(kubernetes_namespace_v1.this) == 2 && length(kubernetes_ingress_v1.demo) == 1
     error_message = "Deve haver dois namespaces e um Ingress na demonstração."
   }
