@@ -13,10 +13,16 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Ambiente para plan (develop=homologacao, main=producao)"
+        description: "Ambiente (develop=homologacao, main=producao)"
         required: true
         type: choice
         options: [homologacao, producao]
+      operation:
+        description: "Operação Terraform"
+        required: true
+        type: choice
+        default: plan
+        options: [plan, apply]
 
 permissions:
   contents: read

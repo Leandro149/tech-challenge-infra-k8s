@@ -133,6 +133,18 @@ jobs:
           role-duration-seconds: 7200
           unset-current-credentials: true
           mask-aws-account-id: false
+      - name: Resolve static AWS principal
+        if: steps.aws_auth_mode.outputs.static_credentials == 'true'
+        run: |
+          caller_arn=$(aws sts get-caller-identity --query Arn --output text)
+          if [[ "$caller_arn" == *:assumed-role/* ]]; then
+            account_id=${caller_arn#arn:aws:sts::}
+            account_id=${account_id%%:*}
+            role_name=${caller_arn#*:assumed-role/}
+            role_name=${role_name%%/*}
+            caller_arn="arn:aws:iam::$account_id:role/$role_name"
+          fi
+          echo "TF_STATIC_PRINCIPAL_ARN=$caller_arn" >> "$GITHUB_ENV"
       - name: Prepare isolated Terraform directories and verify runner IP
         id: config
         run: node scripts/ci/terraform-config.mjs render
