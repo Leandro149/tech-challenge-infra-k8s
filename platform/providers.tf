@@ -12,7 +12,8 @@ data "terraform_remote_state" "infra" {
 }
 
 locals {
-  infra = data.terraform_remote_state.infra.outputs
+  infra                             = data.terraform_remote_state.infra.outputs
+  load_balancer_controller_role_arn = try(local.infra.load_balancer_controller_role_arn, null)
   token_args = [
     "eks", "get-token",
     "--region", local.infra.aws_region,

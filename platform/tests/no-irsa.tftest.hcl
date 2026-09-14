@@ -6,13 +6,12 @@ override_data {
   target = data.terraform_remote_state.infra
   values = {
     outputs = {
-      aws_region                        = "us-east-1"
-      environment                       = "hml"
-      cluster_name                      = "tech-challenge-dev"
-      cluster_endpoint                  = "https://test.eks.amazonaws.com"
-      cluster_ca_certificate            = "dGVzdC1jYQ=="
-      vpc_id                            = "vpc-0123456789abcdef0"
-      load_balancer_controller_role_arn = null
+      aws_region             = "us-east-1"
+      environment            = "hml"
+      cluster_name           = "tech-challenge-dev"
+      cluster_endpoint       = "https://test.eks.amazonaws.com"
+      cluster_ca_certificate = "dGVzdC1jYQ=="
+      vpc_id                 = "vpc-0123456789abcdef0"
     }
   }
 }
@@ -21,7 +20,8 @@ variables {
   demo_ingress_cidrs = ["203.0.113.10/32"]
 }
 
-run "controller_without_irsa_annotation" {
+# Outputs nulos são omitidos pelo Terraform no state remoto.
+run "controller_with_irsa_output_absent_from_state" {
   command = plan
 
   assert {
