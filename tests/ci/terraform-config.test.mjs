@@ -180,10 +180,12 @@ test('bootstrap handles first execution and preserves errors and managed OIDC pr
     const root = mkdtempSync(join(tmpdir(), 'tc3-bootstrap-test-'));
     const portable = value => value.replaceAll('\\', '/');
     const calls = join(root, 'aws-calls');
+    const terraformCalls = join(root, 'terraform-calls');
     const githubEnv = join(root, 'github-env');
     const scriptPath = join(root, 'verify.sh');
     writeFileSync(scriptPath, `
 terraform() {
+  printf '%s\\n' "$*" >> "$MOCK_TERRAFORM_CALLS"
   printf '%s\\n' "$MOCK_STATE_OUTPUT"
   printf '%s\\n' "$MOCK_STATE_ERROR" >&2
   return "$MOCK_STATE_EXIT"
@@ -194,6 +196,7 @@ ${script}`);
     const result = spawnSync(bash, ['-e', portable(scriptPath)], { encoding: 'utf8', env: {
       ...process.env, RUNNER_TEMP: portable(root), BOOTSTRAP_DIR: portable(root),
       GITHUB_ENV: portable(githubEnv), AWS_ACCOUNT_ID: '213284176265', MOCK_CALLS: portable(calls),
+      MOCK_TERRAFORM_CALLS: portable(terraformCalls),
       MOCK_STATE_OUTPUT: scenario.output ?? '', MOCK_STATE_ERROR: scenario.error ?? '',
       MOCK_STATE_EXIT: scenario.exit, MOCK_PROVIDER_EXIT: scenario.existingProvider ? '0' : '1',
     } });
@@ -202,4 +205,35 @@ ${script}`);
     if (scenario.existingProvider) assert.match(readFileSync(githubEnv, 'utf8'), /TF_VAR_existing_github_oidc_provider_arn=/);
     if (scenario.expected === 1) assert.match(result.stderr, new RegExp(scenario.error));
   }
+});
+
+test('bootstrap removes legacy bucket resources from remote state before planning', () => {
+  const bash = process.platform === 'win32' ? join(process.env.ProgramFiles ?? 'C:/Program Files', 'Git/bin/bash.exe') : 'bash';
+  if (process.platform === 'win32' && !existsSync(bash)) return;
+  const workflow = readFileSync('.github/workflows/terraform-bootstrap.yml', 'utf8');
+  const block = workflow.match(/- name: Reuse an existing GitHub OIDC provider\r?\n        run: \|\r?\n([\s\S]*?)(?=      - name:)/);
+  assert.ok(block, 'Etapa de reutilização de OIDC deve existir.');
+  const script = block[1].split(/\r?\n/).map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+  const root = mkdtempSync(join(tmpdir(), 'tc3-bootstrap-legacy-state-'));
+  const portable = value => value.replaceAll('\\', '/');
+  const terraformCalls = join(root, 'terraform-calls');
+  const scriptPath = join(root, 'verify.sh');
+  writeFileSync(scriptPath, `
+terraform() {
+  printf '%s\\n' "$*" >> "$MOCK_TERRAFORM_CALLS"
+  if [[ "$*" == *' state list' ]]; then
+    printf '%s\\n' 'aws_s3_bucket.state["homologacao"]' 'aws_s3_bucket_public_access_block.state["producao"]' 'aws_iam_role.terraform["producao-plan"]'
+  fi
+}
+aws() { printf '{}\\n'; }
+jq() { return 1; }
+${script}`);
+  const result = spawnSync(bash, ['-e', portable(scriptPath)], { encoding: 'utf8', env: {
+    ...process.env, RUNNER_TEMP: portable(root), BOOTSTRAP_DIR: portable(root), GITHUB_ENV: portable(join(root, 'github-env')),
+    AWS_ACCOUNT_ID: '213284176265', MOCK_TERRAFORM_CALLS: portable(terraformCalls),
+  } });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = readFileSync(terraformCalls, 'utf8');
+  assert.match(calls, /state rm aws_s3_bucket\.state\["homologacao"\] aws_s3_bucket_public_access_block\.state\["producao"\]/);
+  assert.doesNotMatch(calls, /aws_iam_role\.terraform/);
 });
