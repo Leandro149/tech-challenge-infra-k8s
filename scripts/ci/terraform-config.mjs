@@ -114,7 +114,8 @@ export function loadConfiguration(environment, variables, root = repositoryRoot)
     environment, labels, bucket: variables.TF_STATE_BUCKET,
     infra: { ...infra, cluster_endpoint_public_access_cidrs: endpointCidrs,
       cluster_admin_principal_arns: adminPrincipals,
-      cluster_readonly_principal_arns: [variables.AWS_PLAN_ROLE_ARN] },
+      // Static authentication uses the caller above; it does not assume the OIDC plan role.
+      cluster_readonly_principal_arns: staticCredentials ? [] : [variables.AWS_PLAN_ROLE_ARN] },
     platform: { ...platform, demo_ingress_cidrs: demoCidrs, expected_environment: expectedSuffix,
       infra_state_backend: 's3', infra_state_config: {
         bucket: variables.TF_STATE_BUCKET, key: 'infra/terraform.tfstate', region: infra.aws_region,

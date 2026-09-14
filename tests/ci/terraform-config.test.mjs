@@ -95,6 +95,7 @@ test('static credentials use the real caller principal as EKS admin', () => {
     'arn:aws:iam::213284176265:role/voclabs',
     'arn:aws:iam::213284176265:user/operator',
   ]);
+  assert.deepEqual(config.infra.cluster_readonly_principal_arns, []);
   assert.throws(() => loadConfiguration('producao', {
     ...variables('prod'),
     STATIC_AWS_ACCESS_KEY_ID: 'ASIATEST',
