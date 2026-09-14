@@ -152,6 +152,19 @@ jobs:
         env:
           INFRA_DIR: ${{ steps.config.outputs.infra_dir }}
         run: |
+          # GetObject reports permission details that S3 HeadObject omits.
+          # Never print the state: it can contain sensitive values.
+          state_probe="$RUNNER_TEMP/infra-state-access-probe.json"
+          state_error="$RUNNER_TEMP/infra-state-access-error.txt"
+          if ! aws s3api get-object --bucket "$TF_STATE_BUCKET" --key infra/terraform.tfstate \
+            --expected-bucket-owner 213284176265 "$state_probe" > /dev/null 2> "$state_error"; then
+            if ! grep -Fq '(NoSuchKey)' "$state_error"; then
+              cat "$state_error" >&2
+              echo "::error::A AWS bloqueou a leitura do estado existente. Confira s3:GetObject, a política do bucket e restrições da sessão/organização. Preserve o bucket e o estado."
+              exit 1
+            fi
+          fi
+          rm -f "$state_probe"
           terraform -chdir="$INFRA_DIR" init -input=false -lockfile=readonly -backend-config=backend.hcl
           terraform -chdir="$INFRA_DIR" validate -no-color
       - name: Plan AWS infrastructure
