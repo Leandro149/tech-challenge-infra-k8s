@@ -72,7 +72,7 @@ run "reuse_existing_iam_role_for_academic_account" {
   command = plan
 
   variables {
-    existing_iam_role_arn = "arn:aws:iam::123456789012:role/voclabs"
+    existing_iam_role_arn = "arn:aws:iam::123456789012:role/LabRole"
   }
 
   assert {
@@ -86,7 +86,7 @@ run "reuse_existing_iam_role_for_academic_account" {
   }
 
   assert {
-    condition     = aws_eks_cluster.this.role_arn == "arn:aws:iam::123456789012:role/voclabs" && aws_eks_node_group.this["general"].node_role_arn == "arn:aws:iam::123456789012:role/voclabs"
+    condition     = aws_eks_cluster.this.role_arn == "arn:aws:iam::123456789012:role/LabRole" && aws_eks_node_group.this["general"].node_role_arn == "arn:aws:iam::123456789012:role/LabRole"
     error_message = "EKS e Node Group devem usar a role IAM existente informada."
   }
 
