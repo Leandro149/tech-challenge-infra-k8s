@@ -50,6 +50,7 @@ Nenhum recurso AWS foi criado. Testes simulados e validação sintática não co
 - Run de bootstrap 34790992720 autenticou e avançou até o apply, mas a conta negou `s3:GetBucketObjectLockConfiguration` por Service Control Policy ao ler `aws_s3_bucket.state["homologacao"]`.
 - Bootstrap ajustado para preparar os buckets de state hml/prod pela AWS CLI da workflow e deixar o Terraform gerenciar somente OIDC/IAM, evitando a leitura de Object Lock bloqueada pelo provider. Outputs e policies usam nomes/ARNs calculados.
 - Run de bootstrap 34791395026 ainda encontrou endereços `aws_s3_bucket*.state[...]` herdados no state remoto e falhou antes do apply. A workflow agora remove somente esses endereços legados do state remoto antes do plan; os buckets AWS permanecem existentes e configurados pela AWS CLI.
+- Runs de bootstrap posteriores falharam em `iam:CreateOpenIDConnectProvider` para `token.actions.githubusercontent.com`; a role `voclabs` da conta acadêmica não permite criar provider OIDC GitHub. Workflow manual agora define `manage_github_oidc_roles=false`, preparando S3 e usando o caminho de Secrets AWS estáticos sem tentar criar OIDC/roles de pipeline.
 
 - Correção do primeiro bootstrap: state list pode retornar "No state file was found!" antes do primeiro apply. Esse caso segue com lista vazia; falhas de acesso ou state inválido continuam interrompendo o job. Teste executa a etapa Bash com cinco cenários simulados, sem chamadas AWS.
 

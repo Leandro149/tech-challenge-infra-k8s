@@ -14,17 +14,18 @@ locals {
     { for name, suffix in local.environments : "${name}-plan" => { environment = name, suffix = suffix, mode = "plan", github_environment = "${name}-plan" } },
     { for name, suffix in local.environments : "${name}-apply" => { environment = name, suffix = suffix, mode = "apply", github_environment = name } },
   )
-  github_oidc_arn = var.existing_github_oidc_provider_arn != null ? var.existing_github_oidc_provider_arn : aws_iam_openid_connect_provider.github[0].arn
+  managed_roles   = var.manage_github_oidc_roles ? local.roles : {}
+  github_oidc_arn = !var.manage_github_oidc_roles ? null : var.existing_github_oidc_provider_arn != null ? var.existing_github_oidc_provider_arn : aws_iam_openid_connect_provider.github[0].arn
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
-  count          = var.existing_github_oidc_provider_arn == null ? 1 : 0
+  count          = var.manage_github_oidc_roles && var.existing_github_oidc_provider_arn == null ? 1 : 0
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
 }
 
 resource "aws_iam_role" "terraform" {
-  for_each             = local.roles
+  for_each             = local.managed_roles
   name                 = "${var.project_name}-${each.value.suffix}-terraform-${each.value.mode}"
   max_session_duration = 7200
   assume_role_policy = jsonencode({
@@ -44,7 +45,7 @@ resource "aws_iam_role" "terraform" {
 }
 
 resource "aws_iam_role_policy" "state" {
-  for_each = local.roles
+  for_each = local.managed_roles
   name     = "environment-state"
   role     = aws_iam_role.terraform[each.key].id
   policy = jsonencode({
@@ -70,7 +71,7 @@ resource "aws_iam_role_policy" "state" {
 }
 
 resource "aws_iam_role_policy" "discovery" {
-  for_each = local.roles
+  for_each = local.managed_roles
   name     = "terraform-discovery"
   role     = aws_iam_role.terraform[each.key].id
   policy = jsonencode({
