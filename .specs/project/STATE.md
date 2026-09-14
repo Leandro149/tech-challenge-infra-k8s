@@ -59,6 +59,14 @@ Nenhum recurso AWS foi criado. Testes simulados e validação sintática não co
 - State local anterior precisa ser migrado antes de usar bootstrap remoto; não há importação automática de recursos existentes.
 - Verificação local: actionlint aprovado, seis scripts Bash com sintaxe válida, quatro cenários de credenciais e HCL do backend verificados, 14 testes Node aprovados. Não foram feitas chamadas AWS nesses testes.
 
+### Correção de autenticação do deploy (2026-09-13)
+
+- Run de merge 34788252271 iniciou apply em ubuntu-latest, mas falhou no OIDC antes de executar Terraform.
+- Secrets STATIC_AWS_* estavam somente no job prepare; movidos para o job terraform que autentica e executa plan/apply. Caller passa secrets com inherit.
+- Credenciais parciais e chaves temporárias sem session token agora falham com mensagem específica, sem exibir valores secretos.
+- Apply não é cancelado por uma nova execução concorrente; somente planos podem ser substituídos.
+- Verificação local: 14 testes Node aprovados e actionlint sem erros. Publicação AWS ainda depende da autenticação válida e do bootstrap existente.
+
 - develop -> homologacao/hml; main -> producao/prod. Buckets, VPCs, clusters, roles e configurações diferentes.
 - Push executa somente CI. PR interna executa plan; closed/merged executa novo plan/apply no commit de merge. Forks sem plan AWS antes do merge; manual somente plan.
 - Reusable workflow com preflight, OIDC plan/apply, diretórios temporários sem tfvars locais, locking S3 e grupos de concorrência por ambiente/operação.
