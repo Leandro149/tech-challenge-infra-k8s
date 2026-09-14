@@ -46,6 +46,9 @@ test('fork PRs receive no AWS plan, but approved merges deploy', () => {
 
 test('manual execution only plans the environment matching the selected branch', () => {
   assert.equal(routeEvent('workflow_dispatch', { inputs: { environment: 'homologacao' } }, context).mode, 'plan');
+  assert.deepEqual(routeEvent('workflow_dispatch', { inputs: { environment: 'homologacao', operation: 'apply' } }, context),
+    { environment: 'homologacao', mode: 'apply', ref: context.sha });
+  assert.throws(() => routeEvent('workflow_dispatch', { inputs: { environment: 'homologacao', operation: 'destroy' } }, context), /operation/);
   assert.throws(() => routeEvent('workflow_dispatch', { inputs: { environment: 'producao' } }, context), /Plano manual/);
 });
 
@@ -78,6 +81,25 @@ test('network configuration allows GitHub hosted Ubuntu runners for academic env
     EKS_PUBLIC_ACCESS_CIDRS: '["0.0.0.0/1","128.0.0.0/1"]',
   });
   assert.deepEqual(config.labels, ['ubuntu-latest']);
+});
+
+test('static credentials use the real caller principal as EKS admin', () => {
+  const config = loadConfiguration('producao', {
+    ...variables('prod'),
+    STATIC_AWS_ACCESS_KEY_ID: 'ASIATEST',
+    STATIC_AWS_SECRET_ACCESS_KEY: 'secret',
+    TF_STATIC_PRINCIPAL_ARN: 'arn:aws:iam::213284176265:role/voclabs',
+    TF_ADMIN_PRINCIPAL_ARNS: '["arn:aws:iam::213284176265:user/operator"]',
+  });
+  assert.deepEqual(config.infra.cluster_admin_principal_arns, [
+    'arn:aws:iam::213284176265:role/voclabs',
+    'arn:aws:iam::213284176265:user/operator',
+  ]);
+  assert.throws(() => loadConfiguration('producao', {
+    ...variables('prod'),
+    STATIC_AWS_ACCESS_KEY_ID: 'ASIATEST',
+    STATIC_AWS_SECRET_ACCESS_KEY: 'secret',
+  }), /TF_STATIC_PRINCIPAL_ARN/);
 });
 
 test('render excludes local tfvars, caches and credentials from temporary roots', () => {
@@ -150,6 +172,18 @@ test('reusable workflow allows apply on the exact merged commit', () => {
     ...process.env, ...variables('prod'), GITHUB_OUTPUT: '', GITHUB_EVENT_PATH: eventPath, GITHUB_EVENT_NAME: 'pull_request_target',
     GITHUB_REPOSITORY: context.repository, GITHUB_SHA: 'merged-sha', GITHUB_REF_NAME: 'main',
     CI_ENVIRONMENT: 'producao', CI_MODE: 'apply', CI_CHECKOUT_REF: 'merged-sha',
+  } });
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('reusable workflow allows manual apply on the current branch head', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tc3-manual-apply-test-'));
+  const eventPath = join(root, 'event.json');
+  writeFileSync(eventPath, JSON.stringify({ inputs: { environment: 'producao', operation: 'apply' } }));
+  const result = spawnSync(process.execPath, ['scripts/ci/terraform-config.mjs', 'prepare'], { encoding: 'utf8', env: {
+    ...process.env, ...variables('prod'), GITHUB_OUTPUT: '', GITHUB_EVENT_PATH: eventPath, GITHUB_EVENT_NAME: 'workflow_dispatch',
+    GITHUB_REPOSITORY: context.repository, GITHUB_SHA: 'current-sha', GITHUB_REF_NAME: 'main',
+    CI_ENVIRONMENT: 'producao', CI_MODE: 'apply', CI_CHECKOUT_REF: 'current-sha',
   } });
   assert.equal(result.status, 0, result.stderr);
 });

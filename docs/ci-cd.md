@@ -13,9 +13,9 @@ Terraform CI/CD para a conta **213284176265**, região **us-east-1**. Autentica�
 | PR mesclada em develop | Validação do merge; plan/apply de infra, depois plan/apply de platform em homologação |
 | PR mesclada em main | Mesmo fluxo em produção |
 | PR de fork | Validação sem credenciais; merge aprovado aciona o deploy normalmente |
-| Execução manual | Somente plan, escolhendo branch e ambiente correspondentes |
+| Execução manual | Plan ou apply, escolhendo branch e ambiente correspondentes |
 
-O `apply` depende de `pull_request_target.closed` com `merged=true`; não é acionado por push direto. Esse evento usa o contexto da branch base para permitir deploy de merges aprovados, inclusive de forks. Os jobs desse evento só executam após merge; código de PR aberta/fechada sem merge não é executado nesse contexto. O pipeline identifica o commit de merge e confere novamente evento/commit antes de autenticar. Para promover uma mudança, primeiro mesclar em `develop` e verificar homologação; depois abrir uma PR de `develop` para `main`.
+O `apply` normalmente depende de `pull_request_target.closed` com `merged=true`; não é acionado por push direto. Esse evento usa o contexto da branch base para permitir deploy de merges aprovados, inclusive de forks. Os jobs desse evento só executam após merge; código de PR aberta/fechada sem merge não é executado nesse contexto. O pipeline identifica o commit de merge e confere novamente evento/commit antes de autenticar. Para promover uma mudança, primeiro mesclar em `develop` e verificar homologação; depois abrir uma PR de `develop` para `main`. Em ambientes acadêmicos, a execução manual também permite `operation=apply` para aplicar a cabeça atual da branch correspondente quando um merge anterior falhou antes da publicação.
 
 ### Separação
 
@@ -42,7 +42,7 @@ Para preparar S3/IAM sem instalar Terraform localmente, execute **Actions → Te
 
 A execução prepara um bucket privado separado, `tech-challenge-tfstate-213284176265-bootstrap`, com criptografia, versionamento e TLS obrigatório, para guardar o state em `bootstrap/terraform.tfstate`. Também prepara os buckets de homologação/produção pela AWS CLI antes do Terraform, porque algumas contas acadêmicas bloqueiam leituras de Object Lock usadas pelo recurso `aws_s3_bucket` do provider. Depois executa init, fmt, validate, plan e apply de `bootstrap/`. Nesta conta acadêmica, a workflow usa `manage_github_oidc_roles=false`, então não tenta criar o provider OIDC GitHub nem roles de pipeline quando o IAM do laboratório bloqueia `iam:CreateOpenIDConnectProvider`. Os deploys seguem usando os Secrets AWS estáticos dos Environments. O bucket do próprio bootstrap é preparado via AWS CLI antes do Terraform e não é gerenciado pelo state dos clusters.
 
-Confira as Variables no resumo da execução. Ao usar credenciais diretamente no deploy, copie também o `TF_ADMIN_PRINCIPAL_ARNS` sugerido para autorizar essa identidade no Kubernetes. Em seguida, reexecute o run do merge com evento `pull_request_target`; o run de push executa somente validações e o run de PR executa somente plan.
+Confira as Variables no resumo da execução. Ao usar credenciais diretamente no deploy, copie também o `TF_ADMIN_PRINCIPAL_ARNS` sugerido para autorizar essa identidade no Kubernetes. Em seguida, execute **Terraform CI/CD → Run workflow → main → producao → apply** para publicar a infraestrutura atual. O run de push executa somente validações e o run de PR executa somente plan.
 
 Se o primeiro plan do PR falhar com `NoSuchBucket`, falta executar o bootstrap. Após mesclar esta configuração, execute a workflow manual antes de reexecutar o deploy. Uma autenticação bem-sucedida não cria o bucket automaticamente.
 
@@ -139,7 +139,7 @@ Exemplo de operador adicional:
 
 Para a configuração acadêmica, também é possível cadastrar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e, quando a credencial for temporária, `AWS_SESSION_TOKEN` como **Secrets** do Environment. Quando esses secrets existem, a action usa essas credenciais diretamente. Se eles não existirem, a action usa OIDC com `id-token: write`, role por Environment e account ID autorizado.
 
-Restrinja as branches de deploy: `homologacao` somente `develop`, `producao` somente `main`. Os Environments `*-plan` precisam aceitar `refs/pull/*/merge` para PRs e a branch correspondente para planos manuais. Proteja `develop` e `main` exigindo PR e os checks de CI antes do merge. As workflows não adicionam uma aprovação manual ao apply após merge.
+Restrinja as branches de deploy: `homologacao` somente `develop`, `producao` somente `main`. Os Environments `*-plan` precisam aceitar `refs/pull/*/merge` para PRs e a branch correspondente para planos manuais. Proteja `develop` e `main` exigindo PR e os checks de CI antes do merge. A execução manual `apply` confere se o commit ainda é o HEAD da branch antes de autenticar.
 
 O subject OIDC corresponde ao Environment, por exemplo `repo:Leandro149/tech-challenge-infra-k8s:environment:producao`; as regras de branch dos Environments completam a restrição do acesso. [Documentação GitHub/AWS OIDC](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws).
 
@@ -157,7 +157,7 @@ Os comandos são executados em diretórios temporários montados com código Ter
 
 Cada ambiente/operação possui grupo de concorrência, com `cancel-in-progress=false`; um plano de PR não substitui um apply pendente. O GitHub mantém o run corrente e o mais recente pendente de cada grupo. Os locks dos backends coordenam o acesso aos states entre plan e apply.
 
-Antes de autenticar para apply, o job confere se o commit de merge ainda é o commit atual da branch base. Se um job antigo sair da fila depois de um merge mais recente, ele falha sem aplicar código antigo; use o run do merge atual. O token GitHub desse check possui apenas leitura e fica restrito a essa etapa.
+Antes de autenticar para apply, o job confere se o commit de merge ou dispatch ainda é o commit atual da branch base. Se um job antigo sair da fila depois de um merge mais recente, ele falha sem aplicar código antigo; use o run do merge atual. O token GitHub desse check possui apenas leitura e fica restrito a essa etapa.
 
 O plano binário permanece no diretório temporário do job e o apply utiliza esse arquivo na mesma execução. Não há publicação de artifacts binários de planos/states nem consumo de planos de PR para aplicar merges. Detalhes ficam nos logs Terraform e o resultado vai para o Job Summary.
 

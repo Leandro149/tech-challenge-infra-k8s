@@ -11,8 +11,10 @@ export function routeEvent(eventName, event, context) {
   if (eventName === 'push') return null;
   if (eventName === 'workflow_dispatch') {
     const environment = event.inputs?.environment;
+    const mode = event.inputs?.operation ?? 'plan';
+    if (!['plan', 'apply'].includes(mode)) throw new Error('Execução manual: escolha operation plan ou apply.');
     if (targets[context.branch] !== environment) throw new Error('Plano manual: escolha develop/homologacao ou main/producao.');
-    return { environment, mode: 'plan', ref: context.sha };
+    return { environment, mode, ref: context.sha };
   }
   if (!['pull_request', 'pull_request_target'].includes(eventName)) return null;
   const pr = event.pull_request;
@@ -101,10 +103,17 @@ export function loadConfiguration(environment, variables, root = repositoryRoot)
   if (extraAdmins.some(arn => !principalPattern.test(arn) || arn === variables.AWS_PLAN_ROLE_ARN)) {
     throw new Error('TF_ADMIN_PRINCIPAL_ARNS: use administradores IAM da conta, sem a role de plan.');
   }
+  const staticCredentials = Boolean(variables.STATIC_AWS_ACCESS_KEY_ID && variables.STATIC_AWS_SECRET_ACCESS_KEY);
+  if (staticCredentials && !principalPattern.test(variables.TF_STATIC_PRINCIPAL_ARN ?? '')) {
+    throw new Error('TF_STATIC_PRINCIPAL_ARN: não foi possível identificar a role/user IAM das credenciais estáticas.');
+  }
+  const adminPrincipals = staticCredentials
+    ? [...new Set([variables.TF_STATIC_PRINCIPAL_ARN, ...extraAdmins])]
+    : [...new Set([variables.AWS_ROLE_ARN, ...extraAdmins])];
   return {
     environment, labels, bucket: variables.TF_STATE_BUCKET,
     infra: { ...infra, cluster_endpoint_public_access_cidrs: endpointCidrs,
-      cluster_admin_principal_arns: [...new Set([variables.AWS_ROLE_ARN, ...extraAdmins])],
+      cluster_admin_principal_arns: adminPrincipals,
       cluster_readonly_principal_arns: [variables.AWS_PLAN_ROLE_ARN] },
     platform: { ...platform, demo_ingress_cidrs: demoCidrs, expected_environment: expectedSuffix,
       infra_state_backend: 's3', infra_state_config: {
@@ -193,7 +202,7 @@ async function main() {
   if (command === 'assert-current-merge') {
     const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
     return assertCurrentMerge({
-      branch: event.pull_request?.base?.ref, repository: process.env.GITHUB_REPOSITORY,
+      branch: event.pull_request?.base?.ref ?? process.env.GITHUB_REF_NAME, repository: process.env.GITHUB_REPOSITORY,
       ref: process.env.CI_CHECKOUT_REF, token: process.env.GH_TOKEN, apiUrl: process.env.GITHUB_API_URL,
     });
   }
