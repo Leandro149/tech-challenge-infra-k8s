@@ -127,6 +127,10 @@ jobs:
               echo "TF_VAR_existing_github_oidc_provider_arn=$provider_arn" >> "$GITHUB_ENV"
             fi
           fi
+          mapfile -t stale_bucket_resources < <(grep -E '^aws_s3_bucket(_versioning|_server_side_encryption_configuration|_public_access_block|_policy)?\.state\[' "$RUNNER_TEMP/bootstrap-resources" || true)
+          if (( ${#stale_bucket_resources[@]} > 0 )); then
+            terraform -chdir="$BOOTSTRAP_DIR" state rm "${stale_bucket_resources[@]}"
+          fi
       - name: Format, validate and plan bootstrap
         run: |
           terraform -chdir="$BOOTSTRAP_DIR" fmt -check
