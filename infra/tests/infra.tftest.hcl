@@ -67,6 +67,34 @@ run "network_and_cluster" {
   }
 }
 
+
+run "reuse_existing_iam_role_for_academic_account" {
+  command = plan
+
+  variables {
+    existing_iam_role_arn = "arn:aws:iam::123456789012:role/voclabs"
+  }
+
+  assert {
+    condition     = length(aws_iam_role.cluster) == 0 && length(aws_iam_role.nodes) == 0
+    error_message = "Contas acadêmicas devem reutilizar a role existente em vez de criar roles IAM."
+  }
+
+  assert {
+    condition     = length(aws_iam_openid_connect_provider.this) == 0 && length(aws_iam_policy.load_balancer_controller) == 0
+    error_message = "O modo com role existente não deve criar OIDC provider nem políticas IAM."
+  }
+
+  assert {
+    condition     = aws_eks_cluster.this.role_arn == "arn:aws:iam::123456789012:role/voclabs" && aws_eks_node_group.this["general"].node_role_arn == "arn:aws:iam::123456789012:role/voclabs"
+    error_message = "EKS e Node Group devem usar a role IAM existente informada."
+  }
+
+  assert {
+    condition     = output.load_balancer_controller_role_arn == null
+    error_message = "Sem IRSA gerenciado, a plataforma não deve receber role ARN do controller."
+  }
+}
 run "reject_open_cluster_endpoint" {
   command = plan
 

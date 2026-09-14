@@ -104,6 +104,17 @@ variable "cluster_readonly_principal_arns" {
   }
 }
 
+
+variable "existing_iam_role_arn" {
+  description = "ARN de uma role IAM existente para contas acadêmicas/labs que bloqueiam criação de IAM; null cria roles dedicadas."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.existing_iam_role_arn == null || can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$", var.existing_iam_role_arn))
+    error_message = "Informe um ARN IAM válido de role existente ou null."
+  }
+}
 variable "node_groups" {
   description = "Managed Node Groups. HPA escala pods; capacidade dos nodes é configurada aqui."
   type = map(object({
