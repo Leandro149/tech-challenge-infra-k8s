@@ -2,7 +2,7 @@ resource "kubernetes_service_account_v1" "load_balancer_controller" {
   metadata {
     name      = "aws-load-balancer-controller"
     namespace = "kube-system"
-    annotations = {
+    annotations = local.infra.load_balancer_controller_role_arn == null ? {} : {
       "eks.amazonaws.com/role-arn" = local.infra.load_balancer_controller_role_arn
     }
   }

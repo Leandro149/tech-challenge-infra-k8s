@@ -5,7 +5,7 @@ resource "aws_cloudwatch_log_group" "cluster" {
 
 resource "aws_eks_cluster" "this" {
   name     = local.cluster_name
-  role_arn = aws_iam_role.cluster.arn
+  role_arn = local.cluster_role_arn
   version  = var.kubernetes_version
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
@@ -71,7 +71,7 @@ resource "aws_eks_addon" "vpc_cni" {
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = "vpc-cni"
   addon_version               = data.aws_eks_addon_version.this["vpc-cni"].version
-  service_account_role_arn    = aws_iam_role.irsa["vpc-cni"].arn
+  service_account_role_arn    = local.enable_irsa ? aws_iam_role.irsa["vpc-cni"].arn : null
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
   depends_on                  = [aws_iam_role_policy_attachment.vpc_cni]
@@ -82,7 +82,7 @@ resource "aws_eks_node_group" "this" {
 
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = each.key
-  node_role_arn   = aws_iam_role.nodes.arn
+  node_role_arn   = local.node_role_arn
   subnet_ids      = [for subnet in aws_subnet.private : subnet.id]
   instance_types  = each.value.instance_types
   capacity_type   = each.value.capacity_type

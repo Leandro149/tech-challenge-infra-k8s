@@ -40,7 +40,7 @@ output "public_subnet_ids" {
 
 output "load_balancer_controller_role_arn" {
   description = "Role IRSA usada pelo Load Balancer Controller."
-  value       = aws_iam_role.irsa["aws-load-balancer-controller"].arn
+  value       = local.enable_irsa ? aws_iam_role.irsa["aws-load-balancer-controller"].arn : null
 }
 
 output "node_group_names" {
