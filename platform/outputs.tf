@@ -10,5 +10,5 @@ output "hpa_names" {
 
 output "demo_url" {
   description = "URL HTTP do ALB da demonstração, quando habilitada."
-  value       = var.enable_demo ? "http://${kubernetes_ingress_v1.demo[0].status[0].load_balancer[0].ingress[0].hostname}" : null
+  value       = length(kubernetes_ingress_v1.demo) > 0 ? "http://${kubernetes_ingress_v1.demo[0].status[0].load_balancer[0].ingress[0].hostname}" : null
 }

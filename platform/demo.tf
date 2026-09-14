@@ -87,7 +87,7 @@ resource "kubernetes_service_v1" "demo" {
 }
 
 resource "kubernetes_ingress_v1" "demo" {
-  count = var.enable_demo ? 1 : 0
+  count = var.enable_demo && length(var.demo_ingress_cidrs) > 0 ? 1 : 0
 
   wait_for_load_balancer = true
 

@@ -83,6 +83,14 @@ test('network configuration allows GitHub hosted Ubuntu runners for academic env
   assert.deepEqual(config.labels, ['ubuntu-latest']);
 });
 
+test('homologacao accepts missing, empty and empty-array demo CIDRs', () => {
+  for (const value of [undefined, '', '[]']) {
+    const config = loadConfiguration('homologacao', { ...variables(), DEMO_INGRESS_CIDRS: value });
+    assert.deepEqual(config.platform.demo_ingress_cidrs, []);
+    assert.equal(config.platform.enable_demo, true);
+  }
+});
+
 test('static credentials use the real caller principal as EKS admin', () => {
   const config = loadConfiguration('producao', {
     ...variables('prod'),

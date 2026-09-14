@@ -55,6 +55,19 @@ run "demo_with_alb_and_hpa" {
   }
 }
 
+run "demo_without_public_ingress" {
+  command = plan
+
+  variables {
+    demo_ingress_cidrs = []
+  }
+
+  assert {
+    condition     = length(kubernetes_ingress_v1.demo) == 0 && length(kubernetes_deployment_v1.demo) == 1 && length(kubernetes_service_v1.demo) == 1 && contains(keys(kubernetes_horizontal_pod_autoscaler_v2.this), "tc3-demo") && output.demo_url == null
+    error_message = "CIDRs vazios devem manter aplicação e HPA, sem Ingress público ou URL."
+  }
+}
+
 run "application_without_demo" {
   command = plan
 
