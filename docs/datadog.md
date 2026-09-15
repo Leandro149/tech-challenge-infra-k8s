@@ -10,7 +10,7 @@ O Agent envia dados para a conta Datadog. Serilog grava JSON em stdout; OpenTele
 
 ## 1. Conta e Secret
 
-No assistente Datadog, a plataforma e **Kubernetes / AWS EKS**, com infraestrutura, APM e logs. Use a instalacao deste repositorio para habilitar OTLP. Escolha o site correspondente a sua conta (US1: `datadoghq.com`; EU: `datadoghq.eu`; outros sites constam na documentacao oficial).
+No assistente Datadog, a plataforma e **Kubernetes / AWS EKS**, com infraestrutura, APM e logs. Use a instalacao deste repositorio para habilitar OTLP. Esta conta usa US1 (`https://app.datadoghq.com/`), portanto `datadog_site = "datadoghq.com"`; os arquivos dos dois ambientes ja registram esse site.
 
 Com AWS CLI/kubectl autenticados no cluster correto e o namespace `observability` ja provisionado por `platform/`, execute da raiz:
 
