@@ -35,7 +35,7 @@ resource "helm_release" "datadog" {
   namespace  = "observability"
   atomic     = true
   wait       = true
-  timeout    = 600
+  timeout    = 1200
 
   values = [yamlencode({
     datadog = {

@@ -40,6 +40,10 @@ run "datadog_otlp_and_logs" {
     error_message = "Agent deve usar site configurado e Secret existente."
   }
   assert {
+    condition     = helm_release.datadog[0].timeout >= 1200
+    error_message = "Primeira instalacao do Agent no EKS deve ter timeout suficiente."
+  }
+  assert {
     condition     = yamldecode(helm_release.datadog[0].values[0]).datadog.otlp.receiver.protocols.grpc.enabled && yamldecode(helm_release.datadog[0].values[0]).datadog.otlp.receiver.protocols.grpc.useHostPort
     error_message = "API usa OTLP no IP do proprio node."
   }

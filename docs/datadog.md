@@ -52,6 +52,14 @@ kubectl get pods -n observability
 
 Em ambientes que usam S3, mantenha a configuracao do backend e `infra_state_config` daquele ambiente. Nao inicialize um state local paralelo ao state da pipeline. O Secret precisa existir ANTES de habilitar o chart. `enable_datadog` fica `false` por padrao ate essa configuracao ser feita.
 
+O deploy do chart pode levar mais de dez minutos na primeira execucao, especialmente enquanto o EKS baixa imagens e cria DaemonSet/Cluster Agent. O Terraform aguarda ate 20 minutos. Se ainda falhar por timeout, verifique os eventos antes de reexecutar a pipeline:
+
+```powershell
+kubectl get pods -n observability -o wide
+kubectl get events -n observability --sort-by=.lastTimestamp
+kubectl describe pods -n observability
+```
+
 O receptor usa hostPort 4317 na rede privada dos nodes. Nao exponha essa porta em LoadBalancer/Ingress nem a internet. A API usa `status.hostIP`. Esta configuracao e para Managed Node Groups Linux; Fargate exige outra estrategia.
 
 ## 3. Publicar API
