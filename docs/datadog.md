@@ -12,6 +12,8 @@ O Agent envia dados para a conta Datadog. Serilog grava JSON em stdout; OpenTele
 
 No assistente Datadog, a plataforma e **Kubernetes / AWS EKS**, com infraestrutura, APM e logs. Use a instalacao deste repositorio para habilitar OTLP. Esta conta usa US1 (`https://app.datadoghq.com/`), portanto `datadog_site = "datadoghq.com"`; os arquivos dos dois ambientes ja registram esse site.
 
+O assistente pode mostrar `helm install datadog-operator` e um Secret no namespace `datadog`. Esse caminho exige aplicar tambem um recurso `DatadogAgent`. Aqui o Terraform gerencia diretamente o chart `datadog` em `observability`; use o script de Secret deste repositorio, em vez de misturar comandos do Operator com o chart. Se uma API Key aparecer em chat, issue ou comando compartilhado, revogue-a em Organization Settings > API Keys e crie outra antes de continuar.
+
 Os clusters configurados sao `tech-challenge-hml` e `tech-challenge-prod`, ambos em `us-east-1` na conta `213284176265`. A AWS CLI foi instalada neste computador para o usuario atual; abra um novo terminal PowerShell para atualizar o PATH, ou execute `aws.exe` de `%LOCALAPPDATA%\Programs\Amazon\AWSCLIV2`. O perfil local `[default]` continha credenciais temporarias expiradas em 2026-09-15; renove a sessao AWS pelo metodo da sua conta antes de consultar o EKS. Confira primeiro:
 
 ```powershell
