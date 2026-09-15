@@ -12,14 +12,22 @@ O Agent envia dados para a conta Datadog. Serilog grava JSON em stdout; OpenTele
 
 No assistente Datadog, a plataforma e **Kubernetes / AWS EKS**, com infraestrutura, APM e logs. Use a instalacao deste repositorio para habilitar OTLP. Esta conta usa US1 (`https://app.datadoghq.com/`), portanto `datadog_site = "datadoghq.com"`; os arquivos dos dois ambientes ja registram esse site.
 
-Com AWS CLI/kubectl autenticados no cluster correto e o namespace `observability` ja provisionado por `platform/`, execute da raiz:
+Os clusters configurados sao `tech-challenge-hml` e `tech-challenge-prod`, ambos em `us-east-1` na conta `213284176265`. A AWS CLI foi instalada neste computador para o usuario atual; abra um novo terminal PowerShell para atualizar o PATH, ou execute `aws.exe` de `%LOCALAPPDATA%\Programs\Amazon\AWSCLIV2`. O perfil local `[default]` continha credenciais temporarias expiradas em 2026-09-15; renove a sessao AWS pelo metodo da sua conta antes de consultar o EKS. Confira primeiro:
 
 ```powershell
-kubectl config current-context
-./scripts/Configure-DatadogSecret.ps1
+aws sts get-caller-identity --region us-east-1
 ```
 
-O script solicita a API Key sem mostra-la e envia o Secret pelo stdin do kubectl. Nao passe a chave para Terraform, Git, appsettings ou para o Deployment da API. O chart requer a chave `api-key` dentro do Secret `datadog-secret`.
+Com identidade valida na conta `213284176265`, gere o contexto do cluster desejado. Para comecar em homologacao:
+
+```powershell
+aws eks update-kubeconfig --region us-east-1 --name tech-challenge-hml
+kubectl config current-context
+kubectl get nodes
+./scripts/Configure-DatadogSecret.ps1 -ClusterName tech-challenge-hml
+```
+
+Para producao, substitua `tech-challenge-hml` por `tech-challenge-prod`. O script verifica o ARN exato do contexto EKS antes de solicitar a API Key, para evitar gravar o Secret em outro cluster. Ele solicita a chave sem mostra-la e envia o Secret pelo stdin do kubectl. Nao passe a chave para Terraform, Git, appsettings ou para o Deployment da API. O chart requer a chave `api-key` dentro do Secret `datadog-secret`.
 
 ## 2. Agent
 

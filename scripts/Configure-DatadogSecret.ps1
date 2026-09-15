@@ -1,10 +1,20 @@
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('tech-challenge-hml', 'tech-challenge-prod')]
+    [string]$ClusterName,
+
     [ValidatePattern('^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$')]
     [string]$SecretName = 'datadog-secret'
 )
 
 $ErrorActionPreference = 'Stop'
+$expectedContext = "arn:aws:eks:us-east-1:213284176265:cluster/$ClusterName"
+$currentContext = (& kubectl config current-context).Trim()
+if ($LASTEXITCODE -ne 0 -or $currentContext -ne $expectedContext) {
+    throw "Contexto Kubernetes incorreto. Esperado: $expectedContext. Atual: $currentContext"
+}
+
 & kubectl get namespace observability -o name
 if ($LASTEXITCODE -ne 0) { throw 'Provisione o namespace observability em platform/ antes de continuar.' }
 
