@@ -196,6 +196,7 @@ jobs:
         if: inputs.mode == 'apply'
         env:
           PLATFORM_DIR: ${{ steps.config.outputs.platform_dir }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
         run: |
           case "$CI_ENVIRONMENT" in
             homologacao) cluster_name="tech-challenge-hml" ;;
@@ -213,8 +214,14 @@ jobs:
 
           if jq -e '.enable_datadog == true' "environments/$CI_ENVIRONMENT/platform.tfvars.json" > /dev/null; then
             secret_name=$(jq -r '.datadog_api_key_secret // "datadog-secret"' "environments/$CI_ENVIRONMENT/platform.tfvars.json")
+            if [[ -n "$DATADOG_API_KEY" ]]; then
+              kubectl get namespace observability -o name
+              printf '%s' "$DATADOG_API_KEY" |
+                kubectl create secret generic "$secret_name" --from-file=api-key=/dev/stdin -n observability --dry-run=client -o json |
+                kubectl apply --server-side --field-manager=tc3-datadog-secret -f -
+            fi
             if ! kubectl get secret "$secret_name" -n observability -o json | jq -e '.data["api-key"] != null' > /dev/null; then
-              echo "::error::Secret $secret_name com a chave api-key nao encontrado em observability no EKS $cluster_name."
+              echo "::error::Secret $secret_name ausente no EKS $cluster_name. Configure DATADOG_API_KEY nos Environment secrets de $CI_ENVIRONMENT no GitHub."
               exit 1
             fi
           fi
