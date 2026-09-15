@@ -196,4 +196,42 @@ jobs:
         if: inputs.mode == 'apply'
         env:
           PLATFORM_DIR: ${{ steps.config.outputs.platform_dir }}
-        run: terraform -chdir="$PLATFORM_DIR" apply -input=false -no-color -lock-timeout=10m tfplan
+        run: |
+          case "$CI_ENVIRONMENT" in
+            homologacao) cluster_name="tech-challenge-hml" ;;
+            producao) cluster_name="tech-challenge-prod" ;;
+            *) echo "::error::Ambiente Kubernetes desconhecido: $CI_ENVIRONMENT"; exit 1 ;;
+          esac
+
+          export KUBECONFIG="$RUNNER_TEMP/eks-platform-kubeconfig"
+          aws eks update-kubeconfig --region us-east-1 --name "$cluster_name" --kubeconfig "$KUBECONFIG"
+          if [[ "$(kubectl config current-context)" != "arn:aws:eks:us-east-1:213284176265:cluster/$cluster_name" ]]; then
+            echo "::error::Contexto Kubernetes nao corresponde ao EKS de $CI_ENVIRONMENT."
+            exit 1
+          fi
+          kubectl get nodes -o wide
+
+          if jq -e '.enable_datadog == true' "environments/$CI_ENVIRONMENT/platform.tfvars.json" > /dev/null; then
+            secret_name=$(jq -r '.datadog_api_key_secret // "datadog-secret"' "environments/$CI_ENVIRONMENT/platform.tfvars.json")
+            if ! kubectl get secret "$secret_name" -n observability -o json | jq -e '.data["api-key"] != null' > /dev/null; then
+              echo "::error::Secret $secret_name com a chave api-key nao encontrado em observability no EKS $cluster_name."
+              exit 1
+            fi
+          fi
+
+          diagnose_datadog() {
+            echo "Estado do Datadog no EKS $cluster_name:"
+            kubectl get deployments,daemonsets,pods -n observability -o wide || true
+            kubectl get events -n observability --sort-by='.lastTimestamp' | tail -n 30 || true
+          }
+
+          (
+            while sleep 60; do diagnose_datadog; done
+          ) &
+          diagnostic_pid=$!
+          trap 'kill "$diagnostic_pid" 2>/dev/null || true' EXIT
+
+          if ! terraform -chdir="$PLATFORM_DIR" apply -input=false -no-color -lock-timeout=10m tfplan; then
+            diagnose_datadog
+            exit 1
+          fi
