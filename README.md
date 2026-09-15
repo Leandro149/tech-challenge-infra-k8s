@@ -4,6 +4,8 @@ Repositório de infraestrutura do Tech Challenge. Provisiona uma VPC, Amazon EKS
 
 ## Atendimento aos requisitos
 
+TC3-10: [instalacao do Datadog Agent, monitores e disponibilidade](docs/datadog.md).
+
 | Requisito | Entrega |
 | --- | --- |
 | VPC e Amazon EKS | VPC em duas AZs, duas subnets públicas, duas privadas, Internet Gateway e NAT Gateway; EKS Kubernetes 1.35 configurável |

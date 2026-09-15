@@ -21,6 +21,43 @@ variables {
   demo_ingress_cidrs = ["203.0.113.10/32"]
 }
 
+run "datadog_disabled_by_default" {
+  command = plan
+  assert {
+    condition     = length(helm_release.datadog) == 0
+    error_message = "Datadog deve ser opt-in."
+  }
+}
+
+run "datadog_otlp_and_logs" {
+  command = plan
+  variables {
+    enable_datadog = true
+    datadog_site   = "datadoghq.eu"
+  }
+  assert {
+    condition     = yamldecode(helm_release.datadog[0].values[0]).datadog.apiKeyExistingSecret == "datadog-secret" && yamldecode(helm_release.datadog[0].values[0]).datadog.site == "datadoghq.eu"
+    error_message = "Agent deve usar site configurado e Secret existente."
+  }
+  assert {
+    condition     = yamldecode(helm_release.datadog[0].values[0]).datadog.otlp.receiver.protocols.grpc.enabled && yamldecode(helm_release.datadog[0].values[0]).datadog.otlp.receiver.protocols.grpc.useHostPort
+    error_message = "API usa OTLP no IP do proprio node."
+  }
+  assert {
+    condition     = yamldecode(helm_release.datadog[0].values[0]).datadog.logs.enabled && !yamldecode(helm_release.datadog[0].values[0]).datadog.logs.containerCollectAll && !yamldecode(helm_release.datadog[0].values[0]).clusterAgent.admissionController.enabled
+    error_message = "Coletar logs por anotacao e evitar injecao de segunda instrumentacao APM."
+  }
+}
+
+run "datadog_requires_namespace" {
+  command = plan
+  variables {
+    enable_datadog = true
+    namespaces     = ["tech-challenge"]
+  }
+  expect_failures = [helm_release.datadog]
+}
+
 run "demo_with_alb_and_hpa" {
   command = plan
 
