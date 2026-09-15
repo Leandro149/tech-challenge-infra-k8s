@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        directory: [bootstrap, infra, platform]
+        directory: [bootstrap, infra, platform, monitoring]
     defaults:
       run:
         working-directory: ${{ matrix.directory }}

@@ -1,4 +1,8 @@
 infra_state_backend = "local"
+# TC3-10: criar Secret datadog-secret (api-key) em observability antes de habilitar.
+enable_datadog         = false
+datadog_site           = "datadoghq.com"
+datadog_api_key_secret = "datadog-secret"
 infra_state_config  = { path = "../infra/terraform.tfstate" }
 
 namespaces         = ["tech-challenge", "observability"]

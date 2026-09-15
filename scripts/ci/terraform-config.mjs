@@ -96,8 +96,8 @@ export function loadConfiguration(environment, variables, root = repositoryRoot)
   validateRunnerLabels(labels);
   const endpointCidrs = jsonArray(variables.EKS_PUBLIC_ACCESS_CIDRS, 'EKS_PUBLIC_ACCESS_CIDRS');
   validateCidrs(endpointCidrs, 'EKS_PUBLIC_ACCESS_CIDRS', true);
-  const demoCidrs = jsonArray(variables.DEMO_INGRESS_CIDRS, 'DEMO_INGRESS_CIDRS', !platform.enable_demo);
-  validateCidrs(demoCidrs, 'DEMO_INGRESS_CIDRS', platform.enable_demo);
+  const demoCidrs = jsonArray(variables.DEMO_INGRESS_CIDRS, 'DEMO_INGRESS_CIDRS', true);
+  validateCidrs(demoCidrs, 'DEMO_INGRESS_CIDRS', false);
   const extraAdmins = jsonArray(variables.TF_ADMIN_PRINCIPAL_ARNS, 'TF_ADMIN_PRINCIPAL_ARNS', true);
   const principalPattern = new RegExp(`^arn:aws:iam::${infra.aws_account_id}:(role|user)/.+$`);
   if (extraAdmins.some(arn => !principalPattern.test(arn) || arn === variables.AWS_PLAN_ROLE_ARN)) {

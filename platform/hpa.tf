@@ -43,6 +43,7 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "this" {
 
     behavior {
       scale_down {
+        select_policy                = "Max"
         stabilization_window_seconds = 300
 
         policy {
@@ -53,6 +54,7 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "this" {
       }
 
       scale_up {
+        select_policy                = "Max"
         stabilization_window_seconds = 0
 
         policy {

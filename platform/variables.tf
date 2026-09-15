@@ -60,12 +60,12 @@ variable "demo_image" {
 }
 
 variable "demo_ingress_cidrs" {
-  description = "CIDRs que podem acessar o ALB da demonstração por HTTP."
+  description = "CIDRs que podem acessar o ALB da demonstração por HTTP. Vazio desabilita o Ingress público."
   type        = list(string)
   default     = []
 
   validation {
-    condition = (!var.enable_demo || length(var.demo_ingress_cidrs) > 0) && alltrue([
+    condition = alltrue([
       for cidr in var.demo_ingress_cidrs : can(cidrnetmask(cidr)) && cidr != "0.0.0.0/0"
     ])
     error_message = "Informe CIDRs IPv4 restritos e válidos; 0.0.0.0/0 não é permitido."
